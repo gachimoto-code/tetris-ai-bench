@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>STACK — Tetris</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="atmosphere" aria-hidden="true"></div>
+
+  <main class="stage">
+    <header class="brand">
+      <h1>STACK</h1>
+      <p class="tagline">落ちるブロックを積み上げろ</p>
+    </header>
+
+    <div class="playfield-wrap">
+      <aside class="panel panel-left">
+        <div class="stat-block">
+          <span class="label">HOLD</span>
+          <canvas id="hold" width="96" height="96"></canvas>
+        </div>
+        <div class="stat-block">
+          <span class="label">SCORE</span>
+          <span id="score" class="value">0</span>
+        </div>
+        <div class="stat-block">
+          <span class="label">LINES</span>
+          <span id="lines" class="value">0</span>
+        </div>
+        <div class="stat-block">
+          <span class="label">LEVEL</span>
+          <span id="level" class="value">1</span>
+        </div>
+      </aside>
+
+      <div class="board-frame">
+        <canvas id="board" width="300" height="600"></canvas>
+        <div id="overlay" class="overlay">
+          <div class="overlay-card">
+            <p id="overlay-title" class="overlay-title">STACK</p>
+            <p id="overlay-msg" class="overlay-msg">スペースでスタート</p>
+            <button id="start-btn" type="button">START</button>
+          </div>
+        </div>
+      </div>
+
+      <aside class="panel panel-right">
+        <div class="stat-block">
+          <span class="label">NEXT</span>
+          <canvas id="next" width="96" height="288"></canvas>
+        </div>
+      </aside>
+    </div>
+
+    <footer class="controls-hint">
+      <span><kbd>←</kbd><kbd>→</kbd> 移動</span>
+      <span><kbd>↑</kbd> / <kbd>X</kbd> 回転</span>
+      <span><kbd>↓</kbd> ソフトドロップ</span>
+      <span><kbd>Space</kbd> ハードドロップ</span>
+      <span><kbd>C</kbd> ホールド</span>
+      <span><kbd>P</kbd> 一時停止</span>
+    </footer>
+
+    <div class="touch-controls" aria-label="タッチ操作">
+      <button type="button" data-action="hold">HOLD</button>
+      <button type="button" data-action="left">←</button>
+      <button type="button" data-action="rotate">↻</button>
+      <button type="button" data-action="right">→</button>
+      <button type="button" data-action="soft">↓</button>
+      <button type="button" data-action="hard">DROP</button>
+    </div>
+  </main>
+
+  <script src="tetris.js"></script>
+</body>
+</html>

@@ -2,6 +2,8 @@
 
 6つのAIに **まったく同じプロンプト** でテトリスを実装させ、共通の12項目チェックリストで採点したベンチマークの記録です。各実装は単一HTMLファイルで、そのままブラウザで開けば遊べます。
 
+第2回として、プロンプトを **「テトリス作って」の一言だけ** にした自由演技も実施しました（`round2/` フォルダ、後半に記録）。
+
 ## 結果
 
 | モデル | スコア（12項目） | ファイル | 備考 |
@@ -14,6 +16,21 @@
 | Muse | 12/12 | [muse-tetris.html](muse-tetris.html) | 仕様忠実。NEXTも正確に1個 |
 
 全員のコードはブラウザでの実動確認済み（エラーなし）。自動プレイのスクリプトでは全員ライン消去まで到達できなかったため、消去の確認はコードレビューによるものです。
+
+## 第2回（自由演技）
+
+プロンプトは **「テトリス作って」** の一言だけ。仕様も出力形式も指定せず、各モデルの初回出力をそのまま収録し、「言われなくても入れていた機能」を棚卸ししました。全員のコードはブラウザでの実動確認済み（エラーなし）。
+
+| モデル | サイズ | ファイル | 特徴 |
+|---|---|---|---|
+| Gemini Hydrogen | 72,307 B | [round2/gemini-free.html](round2/gemini-free.html) | 最大作。コンボ判定、Web Audio合成の効果音、パーティクル、SRSキック、DAS/ARR、ロックディレイ。TailwindをCDNから読む外部依存あり |
+| Cursor Auto | 27,126 B（3ファイル） | [round2/cursor-free/index.html](round2/cursor-free/index.html) | 単一HTMLではなく3ファイルに分割。タイトルは「STACK」。SRSキックテーブル完全実装＋独自キーリピート |
+| Claude Opus 5.5 | 14,405 B | [round2/opus-free.html](round2/opus-free.html) | アーケード筐体デザイン。DAS/ARR（150ms/40ms）、ロックディレイ500ms、フォーカス喪失で自動ポーズ、ベストスコア保存。Google Fonts依存あり |
+| ChatGPT | 12,041 B | [round2/chatgpt-free.html](round2/chatgpt-free.html) | ホールドなし、NEXT 1個。シャッフルが sort(()=>Math.random()-.5) の偏り実装 |
+| Muse | 8,670 B | [round2/muse-free.html](round2/muse-free.html) | 唯一の白基調。NEXT 3個、ホールド、ゴースト。スコアは固定式（倍率なし）、加速は直線式 |
+| Inkling 2 Mini | 4,676 B | [round2/inkling-free.html](round2/inkling-free.html) | 最小構成。NEXT・ホールド・ゴーストなし、速度500ms固定、出現は完全ランダム。スコア式は「行数×100×行数」の独自仕様。生回答（説明文つき）は [round2/inkling-free-raw.txt](round2/inkling-free-raw.txt) |
+
+Inkling の生成条件は第1回再挑戦と同じ（Vulkan 全オフロード、ctx 49152、temp 1.0 / top-p 1.0 / min-p 0、max_tokens 32768）。推論 7,621 トークン＋可視回答 2,316 トークン、510.6 秒、19.52 tok/s でした。
 
 ## 統一プロンプト（全文）
 

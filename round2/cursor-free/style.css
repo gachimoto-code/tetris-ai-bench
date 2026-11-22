@@ -1,0 +1,325 @@
+:root {
+  --ink: #0c1412;
+  --surface: #14201c;
+  --frame: #1e312a;
+  --line: #2a463c;
+  --mint: #7dffb3;
+  --lime: #c8f542;
+  --coral: #ff6b4a;
+  --sky: #5ec8ff;
+  --amber: #ffc14a;
+  --violet-piece: #b794ff;
+  --text: #e8f5ef;
+  --muted: #8aafa0;
+  --grid: rgba(126, 255, 179, 0.06);
+  --shadow: rgba(0, 0, 0, 0.45);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  color: var(--text);
+  background: var(--ink);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+.atmosphere {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(126, 255, 179, 0.18), transparent 55%),
+    radial-gradient(ellipse 60% 40% at 100% 80%, rgba(255, 107, 74, 0.12), transparent 50%),
+    radial-gradient(ellipse 50% 35% at 0% 60%, rgba(94, 200, 255, 0.1), transparent 45%),
+    linear-gradient(165deg, #0a1210 0%, #101c18 45%, #0d1614 100%);
+}
+
+.atmosphere::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 3px,
+      rgba(255, 255, 255, 0.015) 3px,
+      rgba(255, 255, 255, 0.015) 4px
+    );
+  pointer-events: none;
+}
+
+.stage {
+  width: min(960px, 100%);
+  margin: 0 auto;
+  padding: 1.5rem 1rem 2.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.brand {
+  text-align: center;
+  animation: brand-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.brand h1 {
+  margin: 0;
+  font-family: "Bebas Neue", Impact, sans-serif;
+  font-size: clamp(3.5rem, 12vw, 5.5rem);
+  letter-spacing: 0.12em;
+  line-height: 0.9;
+  color: var(--lime);
+  text-shadow: 0 2px 0 #5a7a20;
+}
+
+.tagline {
+  margin: 0.35rem 0 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+}
+
+.playfield-wrap {
+  display: grid;
+  grid-template-columns: auto auto auto;
+  gap: 1rem;
+  align-items: start;
+  animation: field-in 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  min-width: 110px;
+}
+
+.stat-block {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  padding: 0.65rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.label {
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+}
+
+.value {
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: var(--mint);
+  font-variant-numeric: tabular-nums;
+}
+
+#hold,
+#next {
+  display: block;
+  width: 100%;
+  height: auto;
+  image-rendering: pixelated;
+}
+
+.board-frame {
+  position: relative;
+  background: var(--frame);
+  border: 2px solid var(--line);
+  box-shadow: 0 18px 40px var(--shadow);
+  padding: 6px;
+}
+
+#board {
+  display: block;
+  width: min(300px, 72vw);
+  height: auto;
+  background: #0a100e;
+  image-rendering: pixelated;
+}
+
+.overlay {
+  position: absolute;
+  inset: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(8, 14, 12, 0.82);
+  backdrop-filter: blur(2px);
+  transition: opacity 0.25s ease;
+}
+
+.overlay.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.overlay-card {
+  text-align: center;
+  padding: 1.25rem;
+  animation: pulse-soft 2.4s ease-in-out infinite;
+}
+
+.overlay-title {
+  margin: 0;
+  font-family: "Bebas Neue", Impact, sans-serif;
+  font-size: 2.4rem;
+  letter-spacing: 0.1em;
+  color: var(--lime);
+}
+
+.overlay-msg {
+  margin: 0.4rem 0 1rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+#start-btn {
+  font-family: inherit;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  font-size: 0.9rem;
+  padding: 0.7rem 1.6rem;
+  border: none;
+  cursor: pointer;
+  color: var(--ink);
+  background: var(--lime);
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+#start-btn:hover {
+  background: var(--mint);
+  transform: translateY(-1px);
+}
+
+#start-btn:active {
+  transform: translateY(1px);
+}
+
+.controls-hint {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.65rem 1.1rem;
+  color: var(--muted);
+  font-size: 0.72rem;
+  max-width: 720px;
+  animation: field-in 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.2s both;
+}
+
+.controls-hint kbd {
+  display: inline-block;
+  min-width: 1.4em;
+  padding: 0.1em 0.35em;
+  margin-right: 0.15em;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.68rem;
+  text-align: center;
+}
+
+.touch-controls {
+  display: none;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  width: min(360px, 100%);
+}
+
+.touch-controls button {
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+  padding: 0.85rem 0.5rem;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+}
+
+.touch-controls button:active {
+  background: var(--frame);
+  color: var(--lime);
+}
+
+@keyframes brand-in {
+  from {
+    opacity: 0;
+    transform: translateY(-16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes field-in {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse-soft {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+}
+
+@media (max-width: 700px) {
+  .playfield-wrap {
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas:
+      "board board"
+      "left right";
+    justify-items: center;
+  }
+
+  .board-frame {
+    grid-area: board;
+  }
+
+  .panel-left {
+    grid-area: left;
+    width: 100%;
+  }
+
+  .panel-right {
+    grid-area: right;
+    width: 100%;
+  }
+
+  .controls-hint {
+    display: none;
+  }
+
+  .touch-controls {
+    display: grid;
+  }
+}

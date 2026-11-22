@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>テトリス</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=DM+Sans:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/* VOICE: 遊び心のある本物のアーケード筐体、無駄な装飾なし
+   IDEA: 赤い筐体に埋め込まれたブラウン管のゲーム画面
+   PICTURE: 盤面そのもの。立体ブロック、ゴースト、ライン消去の閃光
+   COLOUR and TYPE: 筐体レッド + 漆黒の画面 + ゴールドのアクセント / Silkscreen + DM Sans
+   LAYOUT: 中央に盤面、左にHOLD、右にNEXTとスコア。600px以下で縦積み＋タッチパッド */
+:root{color-scheme:light dark;--bg:light-dark(#b3202c,#3a0a10);--case:light-dark(#8e1520,#250609);--edge:light-dark(#d9454f,#5a1219);--scr:#0b0b0e;--ink:#fff4e0;--gold:#ffc23d;--dim:#9a8f86}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 "DM Sans",system-ui,sans-serif;overflow-x:clip;min-height:100vh;-webkit-user-select:none;user-select:none}
+.wrap{max-width:860px;margin:0 auto;padding:clamp(14px,3vw,32px) max(4vw,12px)}
+h1{font:700 clamp(28px,5vw,44px)/1.05 Silkscreen,monospace;margin:0 0 14px;text-align:center;color:var(--gold);text-shadow:0 3px 0 var(--case)}
+.cab{background:var(--case);border-radius:22px;padding:clamp(10px,2.5vw,22px);box-shadow:inset 0 2px 0 var(--edge),0 18px 40px rgba(0,0,0,.35);display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:clamp(10px,2vw,20px);align-items:start}
+.side{display:grid;gap:12px}
+.panel{background:var(--scr);border-radius:10px;padding:10px 12px;box-shadow:inset 0 0 0 2px #000,inset 0 0 18px rgba(255,194,61,.08)}
+.lab{font:400 13px/1 Silkscreen,monospace;color:var(--dim);margin-bottom:6px}
+.val{font:700 22px/1.1 Silkscreen,monospace;color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap}
+.val.big{color:var(--gold)}
+.mini{display:block;width:100%;aspect-ratio:4/3}
+.screen{position:relative;background:var(--scr);border-radius:12px;padding:6px;box-shadow:inset 0 0 0 3px #000,0 0 0 4px var(--edge)}
+#board{display:block;height:min(72vh,640px);aspect-ratio:1/2;width:auto;max-width:100%}
+.ov{position:absolute;inset:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:rgba(11,11,14,.82);text-align:center;padding:16px;border-radius:6px}
+.ov[hidden]{display:none}
+.ov h2{font:700 26px/1.1 Silkscreen,monospace;margin:0;color:var(--gold)}
+.ov p{margin:0;font-size:14px;color:#ddd}
+button{font:700 15px/1 Silkscreen,monospace;color:#1a0a00;background:var(--gold);border:0;border-radius:10px;min-height:44px;padding:0 18px;cursor:pointer;box-shadow:0 4px 0 #a8701a;touch-action:manipulation}
+button:active{transform:translateY(3px);box-shadow:0 1px 0 #a8701a}
+button:focus-visible{outline:3px solid #fff;outline-offset:2px}
+.keys{font-size:13px;color:var(--dim);line-height:1.7}
+.keys b{color:var(--ink);font-weight:600}
+.pad{display:none;margin-top:14px;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+.pad button{min-height:56px;padding:0;font-size:18px;background:var(--edge);color:var(--ink);box-shadow:0 4px 0 #000}
+.pad button.hd{background:var(--gold);color:#1a0a00;box-shadow:0 4px 0 #a8701a}
+.foot{text-align:center;margin-top:14px;font-size:13px;color:rgba(255,244,224,.75)}
+@media(max-width:600px){
+ .cab{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"s b" "h b"}
+ .cab>.screen{grid-area:b}.cab>.right{grid-area:s}.cab>.left{grid-area:h}
+ #board{height:min(62vh,520px)}
+ .val{font-size:16px}.panel{padding:8px}
+ .keys{display:none}.pad{display:grid}
+}
+@media(pointer:coarse){.pad{display:grid}.keys{display:none}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+ <h1>TETRIS</h1>
+ <div class="cab">
+  <div class="side left">
+   <div class="panel"><div class="lab">HOLD</div><canvas id="hold" class="mini"></canvas></div>
+   <div class="panel"><div class="lab">LEVEL</div><div class="val" id="lv">1</div></div>
+   <div class="panel"><div class="lab">LINES</div><div class="val" id="ln">0</div></div>
+   <div class="keys"><b>← →</b> 移動<br><b>↑ / X</b> 右回転<br><b>Z</b> 左回転<br><b>↓</b> ソフトドロップ<br><b>Space</b> ハードドロップ<br><b>C / Shift</b> ホールド<br><b>P / Esc</b> ポーズ</div>
+  </div>
+  <div class="screen">
+   <canvas id="board"></canvas>
+   <div class="ov" id="ov"><h2 id="ovT">TETRIS</h2><p id="ovP">ラインを揃えて消そう</p><button id="start">START</button></div>
+  </div>
+  <div class="side right">
+   <div class="panel"><div class="lab">NEXT</div><canvas id="next" class="mini" style="aspect-ratio:3/5"></canvas></div>
+   <div class="panel"><div class="lab">SCORE</div><div class="val big" id="sc">0</div></div>
+   <div class="panel"><div class="lab">BEST</div><div class="val" id="hi">0</div></div>
+  </div>
+ </div>
+ <div class="pad" id="pad">
+  <button data-a="hold" aria-label="ホールド">H</button>
+  <button data-a="left" aria-label="左">◀</button>
+  <button data-a="right" aria-label="右">▶</button>
+  <button data-a="rot" aria-label="回転">⟳</button>
+  <button data-a="soft" aria-label="ソフトドロップ">▼</button>
+  <button data-a="hard" class="hd" aria-label="ハードドロップ">⤓</button>
+ </div>
+ <p class="foot">7-bag・ゴースト・ホールド・壁蹴り・ロック遅延あり</p>
+</div>
+<script>
+{
+const W=10,H=20,HIDDEN=2;
+const COL={I:'#3ad6e8',O:'#ffd23a',T:'#b55cf0',S:'#55d66b',Z:'#f04848',J:'#3f7cf0',L:'#ff9a2e'};
+const SH={I:[[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]],O:[[1,1],[1,1]],T:[[0,1,0],[1,1,1],[0,0,0]],S:[[0,1,1],[1,1,0],[0,0,0]],Z:[[1,1,0],[0,1,1],[0,0,0]],J:[[1,0,0],[1,1,1],[0,0,0]],L:[[0,0,1],[1,1,1],[0,0,0]]};
+const KICK=[[0,0],[-1,0],[1,0],[0,-1],[-1,-1],[1,-1],[-2,0],[2,0]];
+const $=id=>document.getElementById(id);
+const cv=$('board'),cx=cv.getContext('2d'),hc=$('hold'),hx=hc.getContext('2d'),nc=$('next'),nx=nc.getContext('2d');
+let grid,cur,bag,queue,hold,canHold,score,lines,level,state='idle',dropT,lockT,lockMoves,clearing=null,best=0;
+try{best=+localStorage.getItem('tetris-best')||0}catch(e){}
+$('hi').textContent=best;
+
+const rot=(m,d)=>{const n=m.length,r=m.map(x=>x.slice());for(let y=0;y<n;y++)for(let x=0;x<n;x++)r[y][x]=d>0?m[n-1-x][y]:m[x][n-1-y];return r};
+const fill=()=>{const b=Object.keys(SH);for(let i=b.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[b[i],b[j]]=[b[j],b[i]]}return b};
+const take=()=>{while(queue.length<6){if(!bag.length)bag=fill();queue.push(bag.pop())}return queue.shift()};
+const mk=t=>{const m=SH[t].map(r=>r.slice());return{t,m,x:Math.floor((W-m.length)/2),y:1}};
+const fits=(m,x,y)=>{for(let r=0;r<m.length;r++)for(let c=0;c<m.length;c++)if(m[r][c]){const gx=x+c,gy=y+r;if(gx<0||gx>=W||gy>=H+HIDDEN)return false;if(gy>=0&&grid[gy][gx])return false}return true};
+const grav=()=>Math.pow(0.8-(level-1)*0.007,level-1)*1000;
+
+function reset(){grid=Array.from({length:H+HIDDEN},()=>Array(W).fill(null));bag=[];queue=[];hold=null;canHold=true;score=0;lines=0;level=1;spawn();hud()}
+function spawn(){cur=mk(take());lockT=0;lockMoves=0;dropT=0;canHold=true;if(!fits(cur.m,cur.x,cur.y))over()}
+function hud(){$('sc').textContent=score;$('ln').textContent=lines;$('lv').textContent=level;if(score>best){best=score;$('hi').textContent=best;try{localStorage.setItem('tetris-best',best)}catch(e){}}drawSide()}
+function grounded(){return!fits(cur.m,cur.x,cur.y+1)}
+function touchLock(){if(grounded()&&lockMoves<15){lockT=0;lockMoves++}}
+function move(dx){if(state!=='play'||clearing)return;if(fits(cur.m,cur.x+dx,cur.y)){cur.x+=dx;touchLock()}}
+function rotate(d){if(state!=='play'||clearing||cur.t==='O')return;const m=rot(cur.m,d);for(const[kx,ky]of KICK){const k=cur.t==='I'?[kx*1,ky]:[kx,ky];if(fits(m,cur.x+k[0],cur.y+k[1])){cur.m=m;cur.x+=k[0];cur.y+=k[1];touchLock();return}}}
+function soft(){if(state!=='play'||clearing)return;if(fits(cur.m,cur.x,cur.y+1)){cur.y++;score+=1;dropT=0;hud()}}
+function hard(){if(state!=='play'||clearing)return;let n=0;while(fits(cur.m,cur.x,cur.y+1)){cur.y++;n++}score+=n*2;lock()}
+function doHold(){if(state!=='play'||clearing||!canHold)return;const t=cur.t;if(hold){cur=mk(hold)}else{cur=mk(take())}hold=t;canHold=false;lockT=0;lockMoves=0;if(!fits(cur.m,cur.x,cur.y))over();drawSide()}
+function ghostY(){let y=cur.y;while(fits(cur.m,cur.x,y+1))y++;return y}
+function lock(){
+ let top=true;
+ cur.m.forEach((r,ry)=>r.forEach((v,rx)=>{if(v){const gy=cur.y+ry;if(gy>=0)grid[gy][cur.x+rx]=cur.t;if(gy>=HIDDEN)top=false}}));
+ if(top){over();return}
+ const full=[];grid.forEach((r,i)=>{if(r.every(Boolean))full.push(i)});
+ if(full.length){clearing={rows:full,t:0};cur=null}else{spawn()}
+ hud();
+}
+function finishClear(){
+ const n=clearing.rows.length;
+ grid=grid.filter((_,i)=>!clearing.rows.includes(i));
+ while(grid.length<H+HIDDEN)grid.unshift(Array(W).fill(null));
+ score+=[0,100,300,500,800][n]*level;lines+=n;level=Math.floor(lines/10)+1;
+ clearing=null;spawn();hud();
+}
+function over(){state='over';cur=null;showOv('GAME OVER','スコア '+score+(score>=best&&score>0?'　ベスト更新！':''),'RETRY')}
+function showOv(t,p,b){$('ovT').textContent=t;$('ovP').textContent=p;$('start').textContent=b;$('ov').hidden=false;$('start').focus()}
+function start(){reset();state='play';$('ov').hidden=true;last=performance.now()}
+function pause(){if(state==='play'){state='pause';showOv('PAUSE','P / Esc で再開','RESUME')}else if(state==='pause'){state='play';$('ov').hidden=true;last=performance.now()}}
+$('start').onclick=()=>state==='pause'?pause():start();
+
+// 描画
+function sizeCanvas(c){const r=c.getBoundingClientRect(),d=devicePixelRatio||1;const w=Math.round(r.width*d),h=Math.round(r.height*d);if(c.width!==w||c.height!==h){c.width=w;c.height=h}return[w,h]}
+function block(g,x,y,s,col,a=1){
+ g.globalAlpha=a;g.fillStyle=col;g.fillRect(x,y,s,s);
+ const e=Math.max(2,s*.14);
+ g.fillStyle='rgba(255,255,255,.38)';g.fillRect(x,y,s,e);g.fillRect(x,y,e,s);
+ g.fillStyle='rgba(0,0,0,.32)';g.fillRect(x,y+s-e,s,e);g.fillRect(x+s-e,y,e,s);
+ g.fillStyle='rgba(255,255,255,.18)';g.fillRect(x+e,y+e,s*.3,s*.3);
+ g.globalAlpha=1;
+}
+function drawBoard(){
+ const[w,h]=sizeCanvas(cv),s=Math.min(w/W,h/H),ox=(w-s*W)/2,oy=(h-s*H)/2;
+ cx.fillStyle='#0b0b0e';cx.fillRect(0,0,w,h);
+ cx.strokeStyle='rgba(255,255,255,.05)';cx.lineWidth=1;
+ for(let x=0;x<=W;x++){cx.beginPath();cx.moveTo(ox+x*s+.5,oy);cx.lineTo(ox+x*s+.5,oy+H*s);cx.stroke()}
+ for(let y=0;y<=H;y++){cx.beginPath();cx.moveTo(ox,oy+y*s+.5);cx.lineTo(ox+W*s,oy+y*s+.5);cx.stroke()}
+ for(let y=HIDDEN;y<H+HIDDEN;y++)for(let x=0;x<W;x++){const t=grid&&grid[y][x];if(t)block(cx,ox+x*s,oy+(y-HIDDEN)*s,s,COL[t])}
+ if(clearing){const a=1-clearing.t/220;cx.fillStyle='rgba(255,244,224,'+Math.max(0,a)+')';clearing.rows.forEach(r=>cx.fillRect(ox,oy+(r-HIDDEN)*s,W*s,s))}
+ if(cur&&state!=='over'){
+  const gy=ghostY();
+  cur.m.forEach((r,ry)=>r.forEach((v,rx)=>{if(v&&gy+ry>=HIDDEN){const X=ox+(cur.x+rx)*s,Y=oy+(gy+ry-HIDDEN)*s;cx.strokeStyle=COL[cur.t];cx.globalAlpha=.55;cx.lineWidth=Math.max(1.5,s*.08);cx.strokeRect(X+cx.lineWidth/2,Y+cx.lineWidth/2,s-cx.lineWidth,s-cx.lineWidth);cx.globalAlpha=1}}));
+  cur.m.forEach((r,ry)=>r.forEach((v,rx)=>{if(v&&cur.y+ry>=HIDDEN)block(cx,ox+(cur.x+rx)*s,oy+(cur.y+ry-HIDDEN)*s,s,COL[cur.t])}));
+ }
+}
+function piece(g,t,cxp,cyp,s,a=1){const m=SH[t];let minx=9,maxx=-1,miny=9,maxy=-1;m.forEach((r,y)=>r.forEach((v,x)=>{if(v){minx=Math.min(minx,x);maxx=Math.max(maxx,x);miny=Math.min(miny,y);maxy=Math.max(maxy,y)}}));const pw=(maxx-minx+1)*s,ph=(maxy-miny+1)*s;m.forEach((r,y)=>r.forEach((v,x)=>{if(v)block(g,cxp-pw/2+(x-minx)*s,cyp-ph/2+(y-miny)*s,s,COL[t],a)}))}
+function drawSide(){
+ let[w,h]=sizeCanvas(hc);hx.clearRect(0,0,w,h);if(hold)piece(hx,hold,w/2,h/2,Math.min(w/5,h/3.2),canHold?1:.35);
+ [w,h]=sizeCanvas(nc);nx.clearRect(0,0,w,h);if(queue){const s=Math.min(w/5,h/11);queue.slice(0,3).forEach((t,i)=>piece(nx,t,w/2,h*(i*2+1)/6,i?s*.8:s))}
+}
+
+// 入力（DAS/ARR）
+const held={};let das=0,arr=0,dir=0;const DAS=150,ARR=40;
+const act={left:()=>move(-1),right:()=>move(1),rot:()=>rotate(1),rotl:()=>rotate(-1),soft:soft,hard:hard,hold:doHold};
+function press(a){
+ if(a==='left'||a==='right'){dir=a==='left'?-1:1;das=0;arr=0;held[a]=true;act[a]()}
+ else if(a==='soft'){held.soft=true;soft()}
+ else act[a]();
+}
+function release(a){held[a]=false;if(a==='left'||a==='right'){dir=held.left?-1:held.right?1:0;das=0}}
+const KM={ArrowLeft:'left',ArrowRight:'right',ArrowUp:'rot',KeyX:'rot',KeyZ:'rotl',ControlLeft:'rotl',ArrowDown:'soft',Space:'hard',KeyC:'hold',ShiftLeft:'hold',ShiftRight:'hold'};
+addEventListener('keydown',e=>{
+ if(e.code==='KeyP'||e.code==='Escape'){pause();e.preventDefault();return}
+ if((e.code==='Enter')&&state!=='play'){$('start').click();e.preventDefault();return}
+ const a=KM[e.code];if(!a)return;e.preventDefault();if(e.repeat)return;if(state==='play')press(a);
+});
+addEventListener('keyup',e=>{const a=KM[e.code];if(a)release(a)});
+addEventListener('blur',()=>{for(const k in held)held[k]=false;dir=0;if(state==='play')pause()});
+document.querySelectorAll('#pad button').forEach(b=>{
+ const a=b.dataset.a;
+ b.addEventListener('pointerdown',e=>{e.preventDefault();if(state==='play')press(a)});
+ ['pointerup','pointerleave','pointercancel'].forEach(ev=>b.addEventListener(ev,()=>release(a)));
+});
+
+// ループ
+let last=performance.now(),softT=0;
+function loop(now){
+ const dt=Math.min(50,now-last);last=now;
+ if(state==='play'){
+  if(clearing){clearing.t+=dt;if(clearing.t>=220)finishClear()}
+  else if(cur){
+   if(dir){das+=dt;if(das>=DAS){arr+=dt;while(arr>=ARR){arr-=ARR;move(dir)}}}
+   if(held.soft){softT+=dt;while(softT>=35){softT-=35;soft()}}else softT=0;
+   if(cur){
+    if(grounded()){lockT+=dt;if(lockT>=500)lock()}
+    else{dropT+=dt;const g=grav();while(dropT>=g&&cur&&!grounded()){dropT-=g;cur.y++}}
+   }
+  }
+ }
+ drawBoard();
+ requestAnimationFrame(loop);
+}
+const ro=new ResizeObserver(()=>{drawBoard();drawSide()});ro.observe(cv);ro.observe(hc);ro.observe(nc);
+reset();state='idle';requestAnimationFrame(loop);
+}
+</script>
+</body>
+</html>

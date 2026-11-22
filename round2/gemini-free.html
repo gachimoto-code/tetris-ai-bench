@@ -1,0 +1,1651 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEON TETRIS // サイバー・テトリス</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #070913;
+            --panel-bg: rgba(15, 23, 42, 0.75);
+            --border-glow: rgba(56, 189, 248, 0.35);
+            --accent-cyan: #00f0ff;
+            --accent-magenta: #ff007f;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-dark);
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(0, 240, 255, 0.08) 0%, transparent 45%),
+                radial-gradient(circle at 85% 30%, rgba(255, 0, 127, 0.08) 0%, transparent 45%),
+                linear-gradient(to bottom, #070913 0%, #0d1224 100%);
+            color: #f8fafc;
+            font-family: 'Noto Sans JP', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            overflow-x: hidden;
+        }
+
+        .font-cyber {
+            font-family: 'Orbitron', 'Noto Sans JP', sans-serif;
+        }
+
+        /* グラスモーフィズムパネル */
+        .cyber-panel {
+            background: var(--panel-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--border-glow);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 0 15px rgba(0, 240, 255, 0.05);
+            border-radius: 14px;
+        }
+
+        /* ゲームボードコンテナ */
+        .board-wrapper {
+            position: relative;
+            padding: 4px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, rgba(0, 240, 255, 0.5), rgba(168, 85, 247, 0.4), rgba(255, 0, 127, 0.5));
+            box-shadow: 0 0 30px rgba(0, 240, 255, 0.2);
+            transition: transform 0.08s ease-out;
+        }
+
+        .board-wrapper.shake {
+            animation: boardShake 0.18s cubic-bezier(.36,.07,.19,.97) both;
+        }
+
+        @keyframes boardShake {
+            10%, 90% { transform: translate3d(-1px, 1px, 0); }
+            20%, 80% { transform: translate3d(2px, -1px, 0); }
+            30%, 50%, 70% { transform: translate3d(-2px, 2px, 0); }
+            40%, 60% { transform: translate3d(2px, -1px, 0); }
+        }
+
+        #gameCanvas {
+            display: block;
+            background-color: #090d1a;
+            border-radius: 12px;
+        }
+
+        /* ネオンテキスト */
+        .neon-text-cyan {
+            text-shadow: 0 0 8px rgba(0, 240, 255, 0.7), 0 0 20px rgba(0, 240, 255, 0.4);
+        }
+        .neon-text-pink {
+            text-shadow: 0 0 8px rgba(255, 0, 127, 0.7), 0 0 20px rgba(255, 0, 127, 0.4);
+        }
+
+        /* サイバーボタン */
+        .cyber-btn {
+            background: linear-gradient(135deg, rgba(0, 240, 255, 0.15), rgba(59, 130, 246, 0.15));
+            border: 1px solid rgba(0, 240, 255, 0.5);
+            color: #e0f2fe;
+            transition: all 0.15s ease;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3), inset 0 0 8px rgba(0, 240, 255, 0.15);
+        }
+        .cyber-btn:hover {
+            background: linear-gradient(135deg, rgba(0, 240, 255, 0.3), rgba(59, 130, 246, 0.3));
+            border-color: #00f0ff;
+            box-shadow: 0 0 16px rgba(0, 240, 255, 0.5);
+            transform: translateY(-1px);
+        }
+        .cyber-btn:active {
+            transform: translateY(1px) scale(0.97);
+        }
+
+        .cyber-btn-primary {
+            background: linear-gradient(135deg, #00f0ff 0%, #3b82f6 100%);
+            border: none;
+            color: #050811;
+            font-weight: 900;
+            box-shadow: 0 0 20px rgba(0, 240, 255, 0.5);
+        }
+        .cyber-btn-primary:hover {
+            background: linear-gradient(135deg, #38f6ff 0%, #60a5fa 100%);
+            box-shadow: 0 0 28px rgba(0, 240, 255, 0.8);
+            color: #02040a;
+        }
+
+        /* タッチコントローラーボタン */
+        .ctrl-btn {
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid rgba(148, 163, 184, 0.3);
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #f1f5f9;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            transition: background 0.1s, transform 0.08s;
+        }
+        .ctrl-btn:active, .ctrl-btn.active-press {
+            background: rgba(0, 240, 255, 0.25);
+            border-color: #00f0ff;
+            transform: scale(0.93);
+            box-shadow: 0 0 15px rgba(0, 240, 255, 0.4);
+        }
+
+        /* オーバーレイ画面 */
+        .overlay-screen {
+            position: absolute;
+            inset: 4px;
+            border-radius: 12px;
+            background: rgba(7, 10, 22, 0.88);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 20;
+            padding: 1.5rem;
+            text-align: center;
+        }
+
+        .hidden-overlay {
+            display: none !important;
+        }
+
+        /* 浮遊スコアポップアップ */
+        @keyframes floatUpFade {
+            0% { opacity: 1; transform: translate(-50%, 0) scale(0.9); }
+            30% { opacity: 1; transform: translate(-50%, -15px) scale(1.1); }
+            100% { opacity: 0; transform: translate(-50%, -45px) scale(1); }
+        }
+        .action-callout {
+            position: absolute;
+            left: 50%;
+            top: 40%;
+            transform: translateX(-50%);
+            pointer-events: none;
+            font-weight: 900;
+            white-space: nowrap;
+            z-index: 15;
+            animation: floatUpFade 0.95s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+    </style>
+</head>
+<body class="p-2 sm:p-4">
+
+    <!-- ヘッダーバー -->
+    <header class="w-full max-w-4xl flex items-center justify-between mb-2 sm:mb-4 px-2">
+        <div class="flex items-center gap-2.5">
+            <div class="w-3 h-7 rounded-sm bg-gradient-to-b from-cyan-400 to-fuchsia-500 shadow-[0_0_12px_#00f0ff]"></div>
+            <h1 class="font-cyber text-xl sm:text-2xl font-black tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-cyan-300 via-sky-200 to-fuchsia-400">
+                NEON TETRIS
+            </h1>
+        </div>
+        <div class="flex items-center gap-2">
+            <!-- ミュート切り替えボタン -->
+            <button id="muteBtn" class="cyber-btn px-3 py-1.5 rounded-lg text-xs sm:text-sm font-bold flex items-center gap-1.5" title="効果音オン/オフ">
+                <svg id="soundOnIcon" class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/>
+                </svg>
+                <svg id="soundOffIcon" class="w-4 h-4 text-rose-400 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15zM17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"/>
+                </svg>
+                <span id="muteText" class="hidden sm:inline">音声 ON</span>
+            </button>
+            <!-- ポーズボタン -->
+            <button id="pauseBtn" class="cyber-btn px-3 py-1.5 rounded-lg text-xs sm:text-sm font-bold flex items-center gap-1.5" title="一時停止 (P / Esc)">
+                <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <span class="hidden sm:inline">一時停止</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- メインゲームエリア -->
+    <main class="w-full max-w-4xl flex flex-col md:flex-row items-center md:items-start justify-center gap-3 sm:gap-5">
+        
+        <!-- 左カラム（PC表示時：ホールド＆統計情報 / モバイル時：上部コンパクトバー） -->
+        <div class="w-full max-w-[360px] md:w-44 flex md:flex-col justify-between gap-2 sm:gap-4">
+            <!-- ホールドパネル -->
+            <div class="cyber-panel p-2.5 sm:p-3.5 flex flex-col items-center flex-1 md:flex-none">
+                <div class="w-full flex items-center justify-between mb-1">
+                    <span class="text-[11px] sm:text-xs font-bold tracking-widest text-cyan-400">HOLD</span>
+                    <span class="text-[10px] text-slate-400 hidden sm:inline">[C / Shift]</span>
+                </div>
+                <canvas id="holdCanvas" width="96" height="64" class="rounded-lg bg-slate-950/60 border border-slate-800/80"></canvas>
+            </div>
+
+            <!-- スコア・レベル・ラインパネル -->
+            <div class="cyber-panel p-2.5 sm:p-4 flex md:flex-col justify-around md:justify-start gap-2 sm:gap-3.5 flex-[2] md:flex-none">
+                <div class="text-center md:text-left">
+                    <div class="text-[10px] sm:text-xs font-bold text-slate-400 tracking-wider">スコア</div>
+                    <div id="scoreVal" class="font-cyber text-base sm:text-2xl font-black text-white neon-text-cyan">0</div>
+                </div>
+                <div class="text-center md:text-left">
+                    <div class="text-[10px] sm:text-xs font-bold text-slate-400 tracking-wider">レベル</div>
+                    <div id="levelVal" class="font-cyber text-base sm:text-xl font-bold text-fuchsia-400">1</div>
+                </div>
+                <div class="text-center md:text-left">
+                    <div class="text-[10px] sm:text-xs font-bold text-slate-400 tracking-wider">ライン</div>
+                    <div id="linesVal" class="font-cyber text-base sm:text-xl font-bold text-cyan-300">0</div>
+                </div>
+                <div class="hidden md:block pt-2 border-t border-slate-700/60">
+                    <div class="text-[10px] font-bold text-slate-400 tracking-wider">ハイスコア</div>
+                    <div id="highScoreVal" class="font-cyber text-sm font-bold text-amber-300">0</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 中央カラム（メイングリッド 10x20） -->
+        <div class="flex items-start gap-2.5 sm:gap-4">
+            <div id="boardWrapper" class="board-wrapper">
+                <canvas id="gameCanvas" width="300" height="600"></canvas>
+                
+                <!-- アクション演出テキストコンテナ -->
+                <div id="calloutContainer" class="absolute inset-0 pointer-events-none overflow-hidden"></div>
+
+                <!-- スタート画面オーバーレイ -->
+                <div id="startOverlay" class="overlay-screen">
+                    <div class="mb-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-400/30 text-cyan-300 text-xs font-bold tracking-widest">
+                        SRS COMPLIANT SYSTEM
+                    </div>
+                    <h2 class="font-cyber text-2xl sm:text-3xl font-black text-white mb-2 neon-text-cyan">NEON TETRIS</h2>
+                    <p class="text-xs sm:text-sm text-slate-300 mb-6 leading-relaxed">
+                        ブロックを積み上げてラインを消去しよう。<br>同時消しや連続コンボで高スコア獲得！
+                    </p>
+                    <button id="startBtn" class="cyber-btn-primary px-8 py-3.5 rounded-xl text-base tracking-wider cursor-pointer w-full max-w-[220px]">
+                        ゲームスタート
+                    </button>
+                    <div class="mt-5 text-[11px] text-slate-400 space-y-1 text-left bg-slate-900/70 p-3 rounded-lg border border-slate-800 w-full">
+                        <div class="flex justify-between"><span>左右移動:</span><span class="text-slate-200 font-mono">← / →</span></div>
+                        <div class="flex justify-between"><span>ソフト / ハード落下:</span><span class="text-slate-200 font-mono">↓ / Space</span></div>
+                        <div class="flex justify-between"><span>右回転 / 左回転:</span><span class="text-slate-200 font-mono">↑, X / Z</span></div>
+                        <div class="flex justify-between"><span>ホールド / 一時停止:</span><span class="text-slate-200 font-mono">C, Shift / P</span></div>
+                    </div>
+                </div>
+
+                <!-- ポーズ画面オーバーレイ -->
+                <div id="pauseOverlay" class="overlay-screen hidden-overlay">
+                    <h2 class="font-cyber text-2xl sm:text-3xl font-black text-cyan-300 mb-2 neon-text-cyan">PAUSED</h2>
+                    <p class="text-sm text-slate-300 mb-6">ゲームを一時停止しています</p>
+                    <div class="flex flex-col gap-3 w-full max-w-[200px]">
+                        <button id="resumeBtn" class="cyber-btn-primary py-3 rounded-xl text-sm tracking-wider cursor-pointer">
+                            ゲーム再開
+                        </button>
+                        <button id="restartFromPauseBtn" class="cyber-btn py-2.5 rounded-xl text-sm font-bold cursor-pointer">
+                            最初からやり直す
+                        </button>
+                    </div>
+                </div>
+
+                <!-- ゲームオーバー画面オーバーレイ -->
+                <div id="gameOverOverlay" class="overlay-screen hidden-overlay">
+                    <h2 class="font-cyber text-2xl sm:text-3xl font-black text-rose-500 mb-1 neon-text-pink">GAME OVER</h2>
+                    <p class="text-xs text-slate-400 mb-5">ブロックが上限に達しました</p>
+                    
+                    <div class="w-full bg-slate-900/90 border border-slate-700/80 rounded-xl p-4 mb-6 space-y-2.5">
+                        <div class="flex justify-between items-center">
+                            <span class="text-xs text-slate-400">最終スコア</span>
+                            <span id="finalScoreVal" class="font-cyber text-xl font-black text-cyan-300">0</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-xs text-slate-400">到達レベル</span>
+                            <span id="finalLevelVal" class="font-cyber text-base font-bold text-fuchsia-400">1</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-xs text-slate-400">消去ライン</span>
+                            <span id="finalLinesVal" class="font-cyber text-base font-bold text-white">0</span>
+                        </div>
+                    </div>
+
+                    <button id="restartBtn" class="cyber-btn-primary px-8 py-3.5 rounded-xl text-base tracking-wider cursor-pointer w-full max-w-[220px]">
+                        もう一度プレイ
+                    </button>
+                </div>
+            </div>
+
+            <!-- 右カラム（ネクストピース3つ表示） -->
+            <div class="cyber-panel p-2 sm:p-3.5 flex flex-col items-center">
+                <span class="text-[11px] sm:text-xs font-bold tracking-widest text-fuchsia-400 mb-2">NEXT</span>
+                <div class="flex flex-col gap-2 sm:gap-3">
+                    <canvas id="nextCanvas0" width="84" height="58" class="rounded-lg bg-slate-950/70 border border-cyan-500/30"></canvas>
+                    <canvas id="nextCanvas1" width="84" height="54" class="rounded-lg bg-slate-950/50 border border-slate-800/80 opacity-85"></canvas>
+                    <canvas id="nextCanvas2" width="84" height="54" class="rounded-lg bg-slate-950/40 border border-slate-800/60 opacity-70"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- PC用操作ガイドパネル（デスクトップのみ表示） -->
+        <div class="hidden lg:flex flex-col gap-3 w-48">
+            <div class="cyber-panel p-4 text-xs text-slate-300 space-y-2.5">
+                <div class="font-bold text-cyan-400 tracking-wider border-b border-slate-700/70 pb-1.5">操作方法</div>
+                <div class="flex justify-between items-center">
+                    <span class="text-slate-400">移動</span>
+                    <kbd class="px-2 py-0.5 bg-slate-800 rounded border border-slate-600 text-[11px]">← →</kbd>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-slate-400">ソフトドロップ</span>
+                    <kbd class="px-2 py-0.5 bg-slate-800 rounded border border-slate-600 text-[11px]">↓</kbd>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-slate-400">ハードドロップ</span>
+                    <kbd class="px-2 py-0.5 bg-slate-800 rounded border border-slate-600 text-[11px]">Space</kbd>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-slate-400">右回転</span>
+                    <kbd class="px-2 py-0.5 bg-slate-800 rounded border border-slate-600 text-[11px]">↑ / X</kbd>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-slate-400">左回転</span>
+                    <kbd class="px-2 py-0.5 bg-slate-800 rounded border border-slate-600 text-[11px]">Z</kbd>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-slate-400">ホールド</span>
+                    <kbd class="px-2 py-0.5 bg-slate-800 rounded border border-slate-600 text-[11px]">C / Shift</kbd>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-slate-400">一時停止</span>
+                    <kbd class="px-2 py-0.5 bg-slate-800 rounded border border-slate-600 text-[11px]">P / Esc</kbd>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- オンスクリーンコントロールボタン（スマホ・タブレット・マウス操作用） -->
+    <section class="w-full max-w-md mt-3 sm:mt-4 px-2">
+        <div class="grid grid-cols-5 gap-1.5 sm:gap-2">
+            <!-- 左移動 -->
+            <button id="btnLeft" class="ctrl-btn py-3 sm:py-3.5" aria-label="左へ移動">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg>
+                <span class="text-[10px] text-slate-400 mt-0.5">左</span>
+            </button>
+            <!-- ソフトドロップ -->
+            <button id="btnDown" class="ctrl-btn py-3 sm:py-3.5" aria-label="下へ移動">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
+                <span class="text-[10px] text-slate-400 mt-0.5">下</span>
+            </button>
+            <!-- 右移動 -->
+            <button id="btnRight" class="ctrl-btn py-3 sm:py-3.5" aria-label="右へ移動">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
+                <span class="text-[10px] text-slate-400 mt-0.5">右</span>
+            </button>
+            <!-- 左回転 -->
+            <button id="btnRotL" class="ctrl-btn py-3 sm:py-3.5" aria-label="左回転">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/></svg>
+                <span class="text-[10px] text-slate-400 mt-1">左回転</span>
+            </button>
+            <!-- 右回転 -->
+            <button id="btnRotR" class="ctrl-btn py-3 sm:py-3.5" aria-label="右回転">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M21 10h-10a8 8 0 00-8 8v2M21 10l-6 6m6-6l-6-6"/></svg>
+                <span class="text-[10px] text-slate-400 mt-1">右回転</span>
+            </button>
+        </div>
+        <div class="grid grid-cols-2 gap-2 mt-2">
+            <!-- ホールドボタン -->
+            <button id="btnHold" class="ctrl-btn py-2.5 flex-row gap-2 border-cyan-500/30" aria-label="ホールド">
+                <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+                <span class="text-xs font-bold tracking-wider text-cyan-200">HOLD (ホールド)</span>
+            </button>
+            <!-- ハードドロップボタン -->
+            <button id="btnHardDrop" class="ctrl-btn py-2.5 flex-row gap-2 border-fuchsia-500/40 bg-fuchsia-950/30" aria-label="ハードドロップ">
+                <svg class="w-4 h-4 text-fuchsia-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 13l-7 7-7-7m14-8l-7 7-7-7"/></svg>
+                <span class="text-xs font-bold tracking-wider text-fuchsia-200">DROP (即落下)</span>
+            </button>
+        </div>
+    </section>
+
+    <script>
+        /**
+         * ============================================================================
+         * Web Audio API サウンドシンセサイザー (外部音声ファイル不要)
+         * ============================================================================
+         */
+        class SoundEffects {
+            constructor() {
+                this.ctx = null;
+                this.muted = false;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    if (AudioCtx) {
+                        this.ctx = new AudioCtx();
+                    }
+                }
+                if (this.ctx && this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            }
+
+            toggleMute() {
+                this.muted = !this.muted;
+                return this.muted;
+            }
+
+            playTone(freq, type, duration, volume = 0.12, slideFreq = null, delay = 0) {
+                if (this.muted) return;
+                this.init();
+                if (!this.ctx) return;
+
+                try {
+                    const now = this.ctx.currentTime + delay;
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+
+                    osc.type = type;
+                    osc.frequency.setValueAtTime(freq, now);
+                    if (slideFreq) {
+                        osc.frequency.exponentialRampToValueAtTime(slideFreq, now + duration);
+                    }
+
+                    gain.gain.setValueAtTime(volume, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+
+                    osc.start(now);
+                    osc.stop(now + duration);
+                } catch (e) {
+                    // オーディオ再生エラーを安全に無視
+                }
+            }
+
+            move() {
+                this.playTone(280, 'triangle', 0.045, 0.08, 340);
+            }
+
+            rotate() {
+                this.playTone(420, 'sine', 0.07, 0.11, 640);
+            }
+
+            softDrop() {
+                this.playTone(190, 'triangle', 0.035, 0.06, 150);
+            }
+
+            hardDrop() {
+                this.playTone(160, 'sawtooth', 0.12, 0.14, 48);
+                this.playTone(320, 'sine', 0.08, 0.1, 90);
+            }
+
+            lock() {
+                this.playTone(140, 'triangle', 0.08, 0.12, 85);
+            }
+
+            hold() {
+                this.playTone(360, 'sine', 0.06, 0.1, 520);
+                this.playTone(520, 'sine', 0.08, 0.1, 680, 0.05);
+            }
+
+            lineClear(lines) {
+                if (lines === 4) {
+                    // テトリス（4ライン同時消し）の華やかなアルペジオ
+                    const notes = [523.25, 659.25, 783.99, 1046.50, 1318.51];
+                    notes.forEach((n, idx) => {
+                        this.playTone(n, 'triangle', 0.22, 0.15, n * 1.02, idx * 0.055);
+                    });
+                } else {
+                    const base = 440 + (lines * 90);
+                    this.playTone(base, 'sine', 0.14, 0.13, base * 1.25);
+                    this.playTone(base * 1.5, 'triangle', 0.18, 0.12, base * 1.6, 0.06);
+                }
+            }
+
+            levelUp() {
+                const notes = [440, 554.37, 659.25, 880];
+                notes.forEach((n, i) => {
+                    this.playTone(n, 'sine', 0.16, 0.13, null, i * 0.07);
+                });
+            }
+
+            gameOver() {
+                const notes = [380, 330, 277, 220, 165];
+                notes.forEach((n, i) => {
+                    this.playTone(n, 'sawtooth', 0.24, 0.12, n * 0.9, i * 0.11);
+                });
+            }
+        }
+
+        /**
+         * ============================================================================
+         * テトリミノ定義 & SRS (Super Rotation System) ウォールキックテーブル
+         * ============================================================================
+         */
+        const COLS = 10;
+        const ROWS = 20;
+        const HIDDEN_ROWS = 2; // 上部のスポーン用バッファ領域
+
+        const TETROMINOES = {
+            I: {
+                color: '#00f0ff',
+                glow: 'rgba(0, 240, 255, 0.65)',
+                matrix: [
+                    [0, 0, 0, 0],
+                    [1, 1, 1, 1],
+                    [0, 0, 0, 0],
+                    [0, 0, 0, 0]
+                ]
+            },
+            J: {
+                color: '#3b82f6',
+                glow: 'rgba(59, 130, 246, 0.65)',
+                matrix: [
+                    [1, 0, 0],
+                    [1, 1, 1],
+                    [0, 0, 0]
+                ]
+            },
+            L: {
+                color: '#ff9800',
+                glow: 'rgba(255, 152, 0, 0.65)',
+                matrix: [
+                    [0, 0, 1],
+                    [1, 1, 1],
+                    [0, 0, 0]
+                ]
+            },
+            O: {
+                color: '#fde047',
+                glow: 'rgba(253, 224, 71, 0.65)',
+                matrix: [
+                    [1, 1],
+                    [1, 1]
+                ]
+            },
+            S: {
+                color: '#10b981',
+                glow: 'rgba(16, 185, 129, 0.65)',
+                matrix: [
+                    [0, 1, 1],
+                    [1, 1, 0],
+                    [0, 0, 0]
+                ]
+            },
+            T: {
+                color: '#d946ef',
+                glow: 'rgba(217, 70, 239, 0.65)',
+                matrix: [
+                    [0, 1, 0],
+                    [1, 1, 1],
+                    [0, 0, 0]
+                ]
+            },
+            Z: {
+                color: '#f43f5e',
+                glow: 'rgba(244, 63, 94, 0.65)',
+                matrix: [
+                    [1, 1, 0],
+                    [0, 1, 1],
+                    [0, 0, 0]
+                ]
+            }
+        };
+
+        // SRS 標準ウォールキックオフセット (J, L, S, T, Z 用)
+        // 回転状態: 0=初期, 1=右(R), 2=180度(2), 3=左(L)
+        // ※画面座標系ではY軸が下向き正のため、SRS公式のY符号を反転して適用
+        const JLSTZ_KICKS = {
+            '0->1': [[0, 0], [-1, 0], [-1, -1], [0, 2], [-1, 2]],
+            '1->0': [[0, 0], [1, 0], [1, 1], [0, -2], [1, -2]],
+            '1->2': [[0, 0], [1, 0], [1, 1], [0, -2], [1, -2]],
+            '2->1': [[0, 0], [-1, 0], [-1, -1], [0, 2], [-1, 2]],
+            '2->3': [[0, 0], [1, 0], [1, -1], [0, 2], [1, 2]],
+            '3->2': [[0, 0], [-1, 0], [-1, 1], [0, -2], [-1, -2]],
+            '3->0': [[0, 0], [-1, 0], [-1, 1], [0, -2], [-1, -2]],
+            '0->3': [[0, 0], [1, 0], [1, -1], [0, 2], [1, 2]]
+        };
+
+        // SRS Iミノ専用ウォールキックオフセット
+        const I_KICKS = {
+            '0->1': [[0, 0], [-2, 0], [1, 0], [-2, 1], [1, -2]],
+            '1->0': [[0, 0], [2, 0], [-1, 0], [2, -1], [-1, 2]],
+            '1->2': [[0, 0], [-1, 0], [2, 0], [-1, -2], [2, 1]],
+            '2->1': [[0, 0], [1, 0], [-2, 0], [1, 2], [-2, -1]],
+            '2->3': [[0, 0], [2, 0], [-1, 0], [2, -1], [-1, 2]],
+            '3->2': [[0, 0], [-2, 0], [1, 0], [-2, 1], [1, -2]],
+            '3->0': [[0, 0], [1, 0], [-2, 0], [1, 2], [-2, -1]],
+            '0->3': [[0, 0], [-1, 0], [2, 0], [-1, -2], [2, 1]]
+        };
+
+        /**
+         * ============================================================================
+         * パーティクル & フラッシュエフェクトシステム
+         * ============================================================================
+         */
+        class ParticleSystem {
+            constructor() {
+                this.particles = [];
+                this.flashes = [];
+            }
+
+            spawnLineClear(rowVisibleY, blockSize, rowColors) {
+                // 横一線のフラッシュエフェクト
+                this.flashes.push({
+                    y: rowVisibleY * blockSize,
+                    height: blockSize,
+                    alpha: 0.95
+                });
+
+                // ブロックごとの発光パーティクル生成
+                for (let col = 0; col < COLS; col++) {
+                    const color = rowColors[col] || '#00f0ff';
+                    const centerX = (col + 0.5) * blockSize;
+                    const centerY = (rowVisibleY + 0.5) * blockSize;
+
+                    for (let i = 0; i < 6; i++) {
+                        const angle = Math.random() * Math.PI * 2;
+                        const speed = 1.5 + Math.random() * 4.5;
+                        this.particles.push({
+                            x: centerX,
+                            y: centerY,
+                            vx: Math.cos(angle) * speed,
+                            vy: Math.sin(angle) * speed - 1.2,
+                            size: 2.5 + Math.random() * 3.5,
+                            color: color,
+                            alpha: 1,
+                            decay: 0.022 + Math.random() * 0.02
+                        });
+                    }
+                }
+            }
+
+            spawnHardDropTrail(x, startY, endY, width, blockSize, color) {
+                for (let i = 0; i < 12; i++) {
+                    this.particles.push({
+                        x: (x + Math.random() * width) * blockSize,
+                        y: (startY + Math.random() * (endY - startY)) * blockSize,
+                        vx: (Math.random() - 0.5) * 0.8,
+                        vy: -0.5 - Math.random() * 1.5,
+                        size: 2 + Math.random() * 2,
+                        color: color,
+                        alpha: 0.65,
+                        decay: 0.035
+                    });
+                }
+            }
+
+            update() {
+                for (let i = this.particles.length - 1; i >= 0; i--) {
+                    const p = this.particles[i];
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.vy += 0.12; // 微弱な重力
+                    p.alpha -= p.decay;
+                    if (p.alpha <= 0) {
+                        this.particles.splice(i, 1);
+                    }
+                }
+
+                for (let i = this.flashes.length - 1; i >= 0; i--) {
+                    const f = this.flashes[i];
+                    f.alpha -= 0.065;
+                    if (f.alpha <= 0) {
+                        this.flashes.splice(i, 1);
+                    }
+                }
+            }
+
+            draw(ctx, canvasWidth) {
+                // フラッシュ描画
+                for (const f of this.flashes) {
+                    ctx.save();
+                    ctx.fillStyle = `rgba(255, 255, 255, ${f.alpha})`;
+                    ctx.shadowColor = '#00f0ff';
+                    ctx.shadowBlur = 20;
+                    ctx.fillRect(0, f.y, canvasWidth, f.height);
+                    ctx.restore();
+                }
+
+                // パーティクル描画
+                for (const p of this.particles) {
+                    ctx.save();
+                    ctx.globalAlpha = Math.max(0, p.alpha);
+                    ctx.fillStyle = p.color;
+                    ctx.shadowColor = p.color;
+                    ctx.shadowBlur = 8;
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+                }
+            }
+        }
+
+        /**
+         * ============================================================================
+         * メインテトリスゲームエンジン
+         * ============================================================================
+         */
+        class TetrisGame {
+            constructor() {
+                this.canvas = document.getElementById('gameCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.holdCanvas = document.getElementById('holdCanvas');
+                this.holdCtx = this.holdCanvas.getContext('2d');
+                this.nextCanvases = [
+                    document.getElementById('nextCanvas0'),
+                    document.getElementById('nextCanvas1'),
+                    document.getElementById('nextCanvas2')
+                ];
+                this.nextCtxs = this.nextCanvases.map(c => c.getContext('2d'));
+
+                this.sfx = new SoundEffects();
+                this.particles = new ParticleSystem();
+
+                this.blockSize = 30;
+                this.grid = [];
+                this.bag = [];
+                this.nextQueue = [];
+                this.holdPiece = null;
+                this.canHold = true;
+
+                this.currentPiece = null;
+                this.score = 0;
+                this.highScore = parseInt(localStorage.getItem('neonTetrisHighScore') || '0', 10);
+                this.level = 1;
+                this.lines = 0;
+                this.combo = -1;
+
+                this.state = 'START'; // START, PLAYING, PAUSED, GAMEOVER
+                this.lastTime = 0;
+                this.dropCounter = 0;
+                this.lockDelayCounter = 0;
+                this.lockDelayLimit = 500; // 接地後の猶予時間(ms)
+                this.lockMoveResets = 0;
+
+                // DAS / ARR (キー長押し時の滑らかな連続移動)
+                this.keysPressed = {};
+                this.dasDelay = 150;
+                this.arrInterval = 40;
+                this.dasTimer = 0;
+                this.arrTimer = 0;
+                this.activeMoveDir = 0;
+
+                this.initResponsiveCanvas();
+                this.updateHighScoreUI();
+                this.bindEvents();
+                this.drawEmptyBoard();
+            }
+
+            /**
+             * 画面サイズに応じたキャンバスサイズの動的調整
+             */
+            initResponsiveCanvas() {
+                const resize = () => {
+                    const isMobile = window.innerWidth < 640;
+                    // モバイルでは画面の高さ・幅に収まるブロックサイズを計算
+                    const maxAvailableHeight = window.innerHeight - (isMobile ? 285 : 150);
+                    const maxAvailableWidth = window.innerWidth - (isMobile ? 125 : 420);
+
+                    const sizeByH = Math.floor(maxAvailableHeight / ROWS);
+                    const sizeByW = Math.floor(maxAvailableWidth / COLS);
+                    const newBlockSize = Math.max(18, Math.min(30, sizeByH, sizeByW));
+
+                    this.blockSize = newBlockSize;
+                    this.canvas.width = COLS * this.blockSize;
+                    this.canvas.height = ROWS * this.blockSize;
+
+                    if (this.state !== 'START') {
+                        this.render();
+                    } else {
+                        this.drawEmptyBoard();
+                    }
+                };
+
+                window.addEventListener('resize', resize);
+                resize();
+            }
+
+            /**
+             * ゲーム開始・リセット処理
+             */
+            startGame() {
+                this.sfx.init();
+                this.grid = Array.from({ length: ROWS + HIDDEN_ROWS }, () => Array(COLS).fill(null));
+                this.bag = [];
+                this.nextQueue = [];
+                this.holdPiece = null;
+                this.canHold = true;
+
+                this.score = 0;
+                this.level = 1;
+                this.lines = 0;
+                this.combo = -1;
+                this.dropCounter = 0;
+                this.lockDelayCounter = 0;
+                this.particles = new ParticleSystem();
+
+                // 7種一巡のバッグからネクストキューを補充
+                while (this.nextQueue.length < 4) {
+                    this.nextQueue.push(this.drawFromBag());
+                }
+
+                this.spawnPiece();
+                this.updateStatsUI();
+                this.drawHold();
+                this.drawNext();
+
+                this.state = 'PLAYING';
+                this.hideAllOverlays();
+                this.lastTime = performance.now();
+                requestAnimationFrame((t) => this.loop(t));
+            }
+
+            /**
+             * 7種1セット（7-Bag Randomizer）方式でのピース抽選
+             */
+            drawFromBag() {
+                if (this.bag.length === 0) {
+                    const types = ['I', 'J', 'L', 'O', 'S', 'T', 'Z'];
+                    for (let i = types.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [types[i], types[j]] = [types[j], types[i]];
+                    }
+                    this.bag = types;
+                }
+                return this.bag.pop();
+            }
+
+            /**
+             * 新しいテトリミノをスポーン
+             */
+            spawnPiece(specificType = null) {
+                const type = specificType || this.nextQueue.shift();
+                if (!specificType) {
+                    this.nextQueue.push(this.drawFromBag());
+                }
+
+                const def = TETROMINOES[type];
+                const matrix = def.matrix.map(row => [...row]);
+                const startX = Math.floor((COLS - matrix[0].length) / 2);
+                const startY = type === 'I' ? 0 : 1; // バッファ領域から自然に出現
+
+                this.currentPiece = {
+                    type,
+                    matrix,
+                    color: def.color,
+                    glow: def.glow,
+                    x: startX,
+                    y: startY,
+                    rotation: 0
+                };
+
+                this.lockDelayCounter = 0;
+                this.lockMoveResets = 0;
+                this.drawNext();
+
+                // スポーン直後に衝突している場合はゲームオーバー
+                if (this.checkCollision(this.currentPiece.matrix, this.currentPiece.x, this.currentPiece.y)) {
+                    this.triggerGameOver();
+                }
+            }
+
+            /**
+             * 衝突判定
+             */
+            checkCollision(matrix, offsetX, offsetY) {
+                for (let r = 0; r < matrix.length; r++) {
+                    for (let c = 0; c < matrix[r].length; c++) {
+                        if (!matrix[r][c]) continue;
+                        const newX = offsetX + c;
+                        const newY = offsetY + r;
+
+                        if (newX < 0 || newX >= COLS || newY >= ROWS + HIDDEN_ROWS) {
+                            return true;
+                        }
+                        if (newY >= 0 && this.grid[newY][newX] !== null) {
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            }
+
+            /**
+             * 行列回転ユーティリティ
+             */
+            rotateMatrix(matrix, dir) {
+                const N = matrix.length;
+                const result = Array.from({ length: N }, () => Array(N).fill(0));
+                for (let r = 0; r < N; r++) {
+                    for (let c = 0; c < N; c++) {
+                        if (dir === 1) {
+                            // 時計回り（右回転）
+                            result[c][N - 1 - r] = matrix[r][c];
+                        } else {
+                            // 反時計回り（左回転）
+                            result[N - 1 - c][r] = matrix[r][c];
+                        }
+                    }
+                }
+                return result;
+            }
+
+            /**
+             * SRS準拠の回転＆ウォールキック実行
+             */
+            rotatePiece(dir) {
+                if (this.state !== 'PLAYING' || !this.currentPiece) return;
+                const p = this.currentPiece;
+                if (p.type === 'O') return; // Oミノは回転不要
+
+                const oldRot = p.rotation;
+                const newRot = (oldRot + dir + 4) % 4;
+                const rotatedMatrix = this.rotateMatrix(p.matrix, dir);
+
+                const kickKey = `${oldRot}->${newRot}`;
+                const kicks = p.type === 'I' ? I_KICKS[kickKey] : JLSTZ_KICKS[kickKey];
+
+                for (const [dx, dy] of kicks) {
+                    if (!this.checkCollision(rotatedMatrix, p.x + dx, p.y + dy)) {
+                        p.matrix = rotatedMatrix;
+                        p.x += dx;
+                        p.y += dy;
+                        p.rotation = newRot;
+                        this.resetLockDelay();
+                        this.sfx.rotate();
+                        return;
+                    }
+                }
+            }
+
+            /**
+             * 左右移動
+             */
+            moveHorizontal(dir) {
+                if (this.state !== 'PLAYING' || !this.currentPiece) return false;
+                if (!this.checkCollision(this.currentPiece.matrix, this.currentPiece.x + dir, this.currentPiece.y)) {
+                    this.currentPiece.x += dir;
+                    this.resetLockDelay();
+                    this.sfx.move();
+                    return true;
+                }
+                return false;
+            }
+
+            /**
+             * 接地時のロック猶予リセット（無限回転防止のため最大15回まで）
+             */
+            resetLockDelay() {
+                if (this.lockMoveResets < 15) {
+                    this.lockDelayCounter = 0;
+                    this.lockMoveResets++;
+                }
+            }
+
+            /**
+             * ゴーストピースのY座標計算
+             */
+            getGhostY() {
+                if (!this.currentPiece) return 0;
+                let ghostY = this.currentPiece.y;
+                while (!this.checkCollision(this.currentPiece.matrix, this.currentPiece.x, ghostY + 1)) {
+                    ghostY++;
+                }
+                return ghostY;
+            }
+
+            /**
+             * ソフトドロップ（1マス落下）
+             */
+            softDrop(isManual = true) {
+                if (this.state !== 'PLAYING' || !this.currentPiece) return false;
+                if (!this.checkCollision(this.currentPiece.matrix, this.currentPiece.x, this.currentPiece.y + 1)) {
+                    this.currentPiece.y++;
+                    this.dropCounter = 0;
+                    if (isManual) {
+                        this.score += 1;
+                        this.updateStatsUI();
+                        this.sfx.softDrop();
+                    }
+                    return true;
+                }
+                return false;
+            }
+
+            /**
+             * ハードドロップ（即座に最下部へ落下＆固定）
+             */
+            hardDrop() {
+                if (this.state !== 'PLAYING' || !this.currentPiece) return;
+                const startY = this.currentPiece.y;
+                const targetY = this.getGhostY();
+                const droppedRows = targetY - startY;
+
+                if (droppedRows > 0) {
+                    this.score += droppedRows * 2;
+                    this.particles.spawnHardDropTrail(
+                        this.currentPiece.x,
+                        Math.max(0, startY - HIDDEN_ROWS),
+                        Math.max(0, targetY - HIDDEN_ROWS + 1),
+                        this.currentPiece.matrix[0].length,
+                        this.blockSize,
+                        this.currentPiece.color
+                    );
+                }
+
+                this.currentPiece.y = targetY;
+                this.sfx.hardDrop();
+                this.triggerBoardShake();
+                this.lockPiece();
+            }
+
+            /**
+             * ホールド機能
+             */
+            holdCurrentPiece() {
+                if (this.state !== 'PLAYING' || !this.currentPiece || !this.canHold) return;
+
+                this.sfx.hold();
+                const currentType = this.currentPiece.type;
+
+                if (this.holdPiece === null) {
+                    this.holdPiece = currentType;
+                    this.spawnPiece();
+                } else {
+                    const swappedType = this.holdPiece;
+                    this.holdPiece = currentType;
+                    this.spawnPiece(swappedType);
+                }
+
+                this.canHold = false;
+                this.drawHold();
+            }
+
+            /**
+             * ピースを盤面に固定し、ライン消去判定を行う
+             */
+            lockPiece() {
+                const p = this.currentPiece;
+                let lockedAboveVisible = true;
+
+                for (let r = 0; r < p.matrix.length; r++) {
+                    for (let c = 0; c < p.matrix[r].length; c++) {
+                        if (!p.matrix[r][c]) continue;
+                        const boardY = p.y + r;
+                        const boardX = p.x + c;
+                        if (boardY >= HIDDEN_ROWS) {
+                            lockedAboveVisible = false;
+                        }
+                        if (boardY >= 0 && boardY < ROWS + HIDDEN_ROWS) {
+                            this.grid[boardY][boardX] = {
+                                color: p.color,
+                                glow: p.glow
+                            };
+                        }
+                    }
+                }
+
+                if (lockedAboveVisible) {
+                    this.triggerGameOver();
+                    return;
+                }
+
+                this.sfx.lock();
+                this.clearLines();
+                this.canHold = true;
+                this.spawnPiece();
+                this.updateStatsUI();
+            }
+
+            /**
+             * 揃ったラインの検出・消去・スコア計算
+             */
+            clearLines() {
+                let clearedCount = 0;
+
+                for (let r = ROWS + HIDDEN_ROWS - 1; r >= 0; r--) {
+                    if (this.grid[r].every(cell => cell !== null)) {
+                        const rowColors = this.grid[r].map(cell => cell.color);
+                        const visibleRow = r - HIDDEN_ROWS;
+                        if (visibleRow >= 0) {
+                            this.particles.spawnLineClear(visibleRow, this.blockSize, rowColors);
+                        }
+
+                        // 行を削除し、上部に空行を追加
+                        this.grid.splice(r, 1);
+                        this.grid.unshift(Array(COLS).fill(null));
+                        clearedCount++;
+                        r++; // 詰まった行を再チェック
+                    }
+                }
+
+                if (clearedCount > 0) {
+                    this.combo++;
+                    const linePoints = [0, 100, 300, 500, 800];
+                    const baseScore = linePoints[clearedCount] * this.level;
+                    const comboBonus = this.combo > 0 ? 50 * this.combo * this.level : 0;
+                    this.score += baseScore + comboBonus;
+
+                    const prevLevel = this.level;
+                    this.lines += clearedCount;
+                    this.level = Math.floor(this.lines / 10) + 1;
+
+                    this.sfx.lineClear(clearedCount);
+                    if (this.level > prevLevel) {
+                        setTimeout(() => this.sfx.levelUp(), 180);
+                    }
+
+                    // アクションコールアウト演出
+                    const labels = ['', 'SINGLE!', 'DOUBLE!', 'TRIPLE!', 'TETRIS!!'];
+                    const colors = ['', 'text-cyan-300', 'text-emerald-300', 'text-amber-300', 'text-fuchsia-400 neon-text-pink'];
+                    let text = labels[clearedCount];
+                    if (this.combo > 0) {
+                        text += ` (${this.combo} COMBO)`;
+                    }
+                    this.showCallout(text, colors[clearedCount]);
+
+                    if (clearedCount >= 3) {
+                        this.triggerBoardShake();
+                    }
+                } else {
+                    this.combo = -1;
+                }
+            }
+
+            /**
+             * ボードのシェイク演出
+             */
+            triggerBoardShake() {
+                const wrapper = document.getElementById('boardWrapper');
+                wrapper.classList.remove('shake');
+                void wrapper.offsetWidth; // リフロー強制
+                wrapper.classList.add('shake');
+            }
+
+            /**
+             * スコア獲得時のポップアップテキスト表示
+             */
+            showCallout(text, colorClass) {
+                const container = document.getElementById('calloutContainer');
+                const el = document.createElement('div');
+                el.className = `action-callout font-cyber text-base sm:text-lg tracking-wider ${colorClass}`;
+                el.textContent = text;
+                container.appendChild(el);
+                setTimeout(() => el.remove(), 950);
+            }
+
+            /**
+             * レベルに応じた自然落下間隔(ms)の計算
+             */
+            getDropInterval() {
+                // レベル1で850ms、レベルが上がるごとに高速化（最短65ms）
+                return Math.max(65, Math.pow(0.82, this.level - 1) * 850);
+            }
+
+            /**
+             * メインゲームループ
+             */
+            loop(timestamp) {
+                if (this.state !== 'PLAYING') return;
+
+                const deltaTime = timestamp - this.lastTime;
+                this.lastTime = timestamp;
+
+                this.handleContinuousInput(deltaTime);
+
+                // 自然落下処理
+                this.dropCounter += deltaTime;
+                const interval = this.getDropInterval();
+                if (this.dropCounter >= interval) {
+                    this.softDrop(false);
+                    this.dropCounter = 0;
+                }
+
+                // 接地判定とロックディレイ処理
+                if (this.currentPiece && this.checkCollision(this.currentPiece.matrix, this.currentPiece.x, this.currentPiece.y + 1)) {
+                    this.lockDelayCounter += deltaTime;
+                    if (this.lockDelayCounter >= this.lockDelayLimit) {
+                        this.lockPiece();
+                    }
+                } else {
+                    this.lockDelayCounter = 0;
+                }
+
+                this.particles.update();
+                this.render();
+
+                requestAnimationFrame((t) => this.loop(t));
+            }
+
+            /**
+             * キー長押し（DAS/ARR）の処理
+             */
+            handleContinuousInput(deltaTime) {
+                // 左右移動の長押し
+                if (this.activeMoveDir !== 0) {
+                    this.dasTimer += deltaTime;
+                    if (this.dasTimer >= this.dasDelay) {
+                        this.arrTimer += deltaTime;
+                        while (this.arrTimer >= this.arrInterval) {
+                            this.moveHorizontal(this.activeMoveDir);
+                            this.arrTimer -= this.arrInterval;
+                        }
+                    }
+                }
+
+                // ソフトドロップ長押し
+                if (this.keysPressed['ArrowDown'] || this.keysPressed['TouchDown']) {
+                    this.softDrop(true);
+                }
+            }
+
+            /**
+             * 描画処理全体
+             */
+            render() {
+                const bs = this.blockSize;
+                const ctx = this.ctx;
+
+                // 背景クリア
+                ctx.fillStyle = '#090d1a';
+                ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+                // 繊細なサイバーグリッド線
+                ctx.strokeStyle = 'rgba(56, 189, 248, 0.06)';
+                ctx.lineWidth = 1;
+                for (let c = 1; c < COLS; c++) {
+                    ctx.beginPath();
+                    ctx.moveTo(c * bs, 0);
+                    ctx.lineTo(c * bs, this.canvas.height);
+                    ctx.stroke();
+                }
+                for (let r = 1; r < ROWS; r++) {
+                    ctx.beginPath();
+                    ctx.moveTo(0, r * bs);
+                    ctx.lineTo(this.canvas.width, r * bs);
+                    ctx.stroke();
+                }
+
+                // 固定済みブロックの描画
+                for (let r = HIDDEN_ROWS; r < ROWS + HIDDEN_ROWS; r++) {
+                    for (let c = 0; c < COLS; c++) {
+                        const cell = this.grid[r][c];
+                        if (cell) {
+                            this.drawBlock(ctx, c, r - HIDDEN_ROWS, bs, cell.color, cell.glow, false);
+                        }
+                    }
+                }
+
+                // ゴーストピースと操作中ピースの描画
+                if (this.currentPiece) {
+                    const p = this.currentPiece;
+                    const ghostY = this.getGhostY();
+
+                    // ゴーストピース
+                    for (let r = 0; r < p.matrix.length; r++) {
+                        for (let c = 0; c < p.matrix[r].length; c++) {
+                            if (!p.matrix[r][c]) continue;
+                            const drawY = ghostY + r - HIDDEN_ROWS;
+                            if (drawY >= 0) {
+                                this.drawBlock(ctx, p.x + c, drawY, bs, p.color, p.glow, true);
+                            }
+                        }
+                    }
+
+                    // 操作中のテトリミノ
+                    for (let r = 0; r < p.matrix.length; r++) {
+                        for (let c = 0; c < p.matrix[r].length; c++) {
+                            if (!p.matrix[r][c]) continue;
+                            const drawY = p.y + r - HIDDEN_ROWS;
+                            if (drawY >= 0) {
+                                this.drawBlock(ctx, p.x + c, drawY, bs, p.color, p.glow, false);
+                            }
+                        }
+                    }
+                }
+
+                // パーティクル・フラッシュ描画
+                this.particles.draw(ctx, this.canvas.width);
+            }
+
+            /**
+             * 単一ブロックのネオンベベル描画
+             */
+            drawBlock(ctx, gridX, gridY, size, color, glow, isGhost = false) {
+                const x = gridX * size;
+                const y = gridY * size;
+                const pad = 1.5;
+                const innerSize = size - pad * 2;
+                const radius = Math.max(3, size * 0.16);
+
+                ctx.save();
+
+                if (isGhost) {
+                    // ゴーストピース（ネオン枠線 + 半透明塗り）
+                    ctx.strokeStyle = color;
+                    ctx.globalAlpha = 0.38;
+                    ctx.lineWidth = 1.8;
+                    this.roundRect(ctx, x + pad + 1, y + pad + 1, innerSize - 2, innerSize - 2, radius);
+                    ctx.stroke();
+
+                    ctx.fillStyle = color;
+                    ctx.globalAlpha = 0.08;
+                    ctx.fill();
+                } else {
+                    // 通常ブロック（発光 + 立体グラデーション）
+                    ctx.shadowColor = glow;
+                    ctx.shadowBlur = 10;
+
+                    ctx.fillStyle = color;
+                    this.roundRect(ctx, x + pad, y + pad, innerSize, innerSize, radius);
+                    ctx.fill();
+
+                    // 内側ハイライト（ガラス・ネオン質感）
+                    ctx.shadowBlur = 0;
+                    const grad = ctx.createLinearGradient(x, y, x + size, y + size);
+                    grad.addColorStop(0, 'rgba(255, 255, 255, 0.45)');
+                    grad.addColorStop(0.5, 'rgba(255, 255, 255, 0.05)');
+                    grad.addColorStop(1, 'rgba(0, 0, 0, 0.35)');
+                    ctx.fillStyle = grad;
+                    this.roundRect(ctx, x + pad, y + pad, innerSize, innerSize, radius);
+                    ctx.fill();
+
+                    // コアの光沢枠
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+                    ctx.lineWidth = 1;
+                    this.roundRect(ctx, x + pad + 1.5, y + pad + 1.5, innerSize - 3, innerSize - 3, Math.max(2, radius - 1));
+                    ctx.stroke();
+                }
+
+                ctx.restore();
+            }
+
+            roundRect(ctx, x, y, w, h, r) {
+                ctx.beginPath();
+                ctx.moveTo(x + r, y);
+                ctx.arcTo(x + w, y, x + w, y + h, r);
+                ctx.arcTo(x + w, y + h, x, y + h, r);
+                ctx.arcTo(x, y + h, x, y, r);
+                ctx.arcTo(x, y, x + w, y, r);
+                ctx.closePath();
+            }
+
+            /**
+             * ミニキャンバス（HOLD / NEXT）へのセンタリング描画
+             */
+            drawMiniPiece(ctx, canvas, type, dimmed = false) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                if (!type) return;
+
+                const def = TETROMINOES[type];
+                const matrix = def.matrix;
+                const miniSize = type === 'I' ? 16 : 18;
+
+                // 実際のブロックが存在するバウンディングボックスを計算して中央揃え
+                let minR = 4, maxR = -1, minC = 4, maxC = -1;
+                for (let r = 0; r < matrix.length; r++) {
+                    for (let c = 0; c < matrix[r].length; c++) {
+                        if (matrix[r][c]) {
+                            minR = Math.min(minR, r);
+                            maxR = Math.max(maxR, r);
+                            minC = Math.min(minC, c);
+                            maxC = Math.max(maxC, c);
+                        }
+                    }
+                }
+
+                const pieceW = (maxC - minC + 1) * miniSize;
+                const pieceH = (maxR - minR + 1) * miniSize;
+                const offsetX = (canvas.width - pieceW) / 2 - minC * miniSize;
+                const offsetY = (canvas.height - pieceH) / 2 - minR * miniSize;
+
+                ctx.save();
+                if (dimmed) ctx.globalAlpha = 0.35;
+
+                for (let r = 0; r < matrix.length; r++) {
+                    for (let c = 0; c < matrix[r].length; c++) {
+                        if (matrix[r][c]) {
+                            this.drawBlock(
+                                ctx,
+                                (offsetX / miniSize) + c,
+                                (offsetY / miniSize) + r,
+                                miniSize,
+                                def.color,
+                                def.glow,
+                                false
+                            );
+                        }
+                    }
+                }
+                ctx.restore();
+            }
+
+            drawHold() {
+                this.drawMiniPiece(this.holdCtx, this.holdCanvas, this.holdPiece, !this.canHold);
+            }
+
+            drawNext() {
+                for (let i = 0; i < 3; i++) {
+                    this.drawMiniPiece(this.nextCtxs[i], this.nextCanvases[i], this.nextQueue[i], false);
+                }
+            }
+
+            drawEmptyBoard() {
+                this.ctx.fillStyle = '#090d1a';
+                this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+            }
+
+            /**
+             * スコア・レベル・ライン数のUI反映
+             */
+            updateStatsUI() {
+                document.getElementById('scoreVal').textContent = this.score.toLocaleString();
+                document.getElementById('levelVal').textContent = this.level;
+                document.getElementById('linesVal').textContent = this.lines;
+
+                if (this.score > this.highScore) {
+                    this.highScore = this.score;
+                    localStorage.setItem('neonTetrisHighScore', String(this.highScore));
+                    this.updateHighScoreUI();
+                }
+            }
+
+            updateHighScoreUI() {
+                const el = document.getElementById('highScoreVal');
+                if (el) el.textContent = this.highScore.toLocaleString();
+            }
+
+            /**
+             * 一時停止・再開・ゲームオーバー画面制御
+             */
+            togglePause() {
+                if (this.state === 'PLAYING') {
+                    this.state = 'PAUSED';
+                    document.getElementById('pauseOverlay').classList.remove('hidden-overlay');
+                } else if (this.state === 'PAUSED') {
+                    this.state = 'PLAYING';
+                    document.getElementById('pauseOverlay').classList.add('hidden-overlay');
+                    this.lastTime = performance.now();
+                    requestAnimationFrame((t) => this.loop(t));
+                }
+            }
+
+            triggerGameOver() {
+                this.state = 'GAMEOVER';
+                this.sfx.gameOver();
+                document.getElementById('finalScoreVal').textContent = this.score.toLocaleString();
+                document.getElementById('finalLevelVal').textContent = this.level;
+                document.getElementById('finalLinesVal').textContent = this.lines;
+                document.getElementById('gameOverOverlay').classList.remove('hidden-overlay');
+            }
+
+            hideAllOverlays() {
+                document.getElementById('startOverlay').classList.add('hidden-overlay');
+                document.getElementById('pauseOverlay').classList.add('hidden-overlay');
+                document.getElementById('gameOverOverlay').classList.add('hidden-overlay');
+            }
+
+            /**
+             * キーボード・UIボタン・タッチ操作バインディング
+             */
+            bindEvents() {
+                // キーボード操作
+                window.addEventListener('keydown', (e) => {
+                    if (['ArrowLeft', 'ArrowRight', 'ArrowDown', 'ArrowUp', 'Space'].includes(e.code)) {
+                        e.preventDefault();
+                    }
+
+                    if (e.code === 'KeyP' || e.code === 'Escape') {
+                        if (this.state === 'PLAYING' || this.state === 'PAUSED') {
+                            this.togglePause();
+                        }
+                        return;
+                    }
+
+                    if (this.state !== 'PLAYING') return;
+                    if (e.repeat) return; // OS標準のリピートを無視し、独自DAS/ARRで制御
+
+                    this.keysPressed[e.code] = true;
+
+                    switch (e.code) {
+                        case 'ArrowLeft':
+                            this.activeMoveDir = -1;
+                            this.dasTimer = 0;
+                            this.arrTimer = 0;
+                            this.moveHorizontal(-1);
+                            break;
+                        case 'ArrowRight':
+                            this.activeMoveDir = 1;
+                            this.dasTimer = 0;
+                            this.arrTimer = 0;
+                            this.moveHorizontal(1);
+                            break;
+                        case 'ArrowDown':
+                            this.softDrop(true);
+                            break;
+                        case 'Space':
+                            this.hardDrop();
+                            break;
+                        case 'ArrowUp':
+                        case 'KeyX':
+                            this.rotatePiece(1);
+                            break;
+                        case 'KeyZ':
+                            this.rotatePiece(-1);
+                            break;
+                        case 'KeyC':
+                        case 'ShiftLeft':
+                        case 'ShiftRight':
+                            this.holdCurrentPiece();
+                            break;
+                    }
+                });
+
+                window.addEventListener('keyup', (e) => {
+                    this.keysPressed[e.code] = false;
+                    if (e.code === 'ArrowLeft' && this.activeMoveDir === -1) {
+                        this.activeMoveDir = this.keysPressed['ArrowRight'] ? 1 : 0;
+                        this.dasTimer = 0;
+                    } else if (e.code === 'ArrowRight' && this.activeMoveDir === 1) {
+                        this.activeMoveDir = this.keysPressed['ArrowLeft'] ? -1 : 0;
+                        this.dasTimer = 0;
+                    }
+                });
+
+                // 画面上の各種ボタン
+                document.getElementById('startBtn').addEventListener('click', () => this.startGame());
+                document.getElementById('restartBtn').addEventListener('click', () => this.startGame());
+                document.getElementById('restartFromPauseBtn').addEventListener('click', () => this.startGame());
+                document.getElementById('resumeBtn').addEventListener('click', () => this.togglePause());
+                document.getElementById('pauseBtn').addEventListener('click', () => this.togglePause());
+
+                // ミュートボタン
+                document.getElementById('muteBtn').addEventListener('click', () => {
+                    const isMuted = this.sfx.toggleMute();
+                    document.getElementById('soundOnIcon').classList.toggle('hidden', isMuted);
+                    document.getElementById('soundOffIcon').classList.toggle('hidden', !isMuted);
+                    document.getElementById('muteText').textContent = isMuted ? '音声 OFF' : '音声 ON';
+                });
+
+                // タッチ・マウス用オンスクリーンコントロール設定ヘルパー
+                const bindHoldControl = (btnId, onStart, onEnd) => {
+                    const btn = document.getElementById(btnId);
+                    const startHandler = (e) => {
+                        e.preventDefault();
+                        btn.classList.add('active-press');
+                        onStart();
+                    };
+                    const endHandler = (e) => {
+                        e.preventDefault();
+                        btn.classList.remove('active-press');
+                        if (onEnd) onEnd();
+                    };
+
+                    btn.addEventListener('touchstart', startHandler, { passive: false });
+                    btn.addEventListener('touchend', endHandler);
+                    btn.addEventListener('touchcancel', endHandler);
+                    btn.addEventListener('mousedown', startHandler);
+                    btn.addEventListener('mouseup', endHandler);
+                    btn.addEventListener('mouseleave', endHandler);
+                };
+
+                // 左右・下移動は長押し連続入力に対応
+                bindHoldControl('btnLeft', () => {
+                    this.activeMoveDir = -1;
+                    this.dasTimer = 0;
+                    this.arrTimer = 0;
+                    this.moveHorizontal(-1);
+                }, () => {
+                    if (this.activeMoveDir === -1) this.activeMoveDir = 0;
+                });
+
+                bindHoldControl('btnRight', () => {
+                    this.activeMoveDir = 1;
+                    this.dasTimer = 0;
+                    this.arrTimer = 0;
+                    this.moveHorizontal(1);
+                }, () => {
+                    if (this.activeMoveDir === 1) this.activeMoveDir = 0;
+                });
+
+                bindHoldControl('btnDown', () => {
+                    this.keysPressed['TouchDown'] = true;
+                    this.softDrop(true);
+                }, () => {
+                    this.keysPressed['TouchDown'] = false;
+                });
+
+                // 単発アクションボタン
+                const bindTapControl = (btnId, action) => {
+                    const btn = document.getElementById(btnId);
+                    btn.addEventListener('touchstart', (e) => {
+                        e.preventDefault();
+                        btn.classList.add('active-press');
+                        action();
+                    }, { passive: false });
+                    btn.addEventListener('touchend', (e) => {
+                        e.preventDefault();
+                        btn.classList.remove('active-press');
+                    });
+                    btn.addEventListener('mousedown', (e) => {
+                        e.preventDefault();
+                        action();
+                    });
+                };
+
+                bindTapControl('btnRotL', () => this.rotatePiece(-1));
+                bindTapControl('btnRotR', () => this.rotatePiece(1));
+                bindTapControl('btnHold', () => this.holdCurrentPiece());
+                bindTapControl('btnHardDrop', () => this.hardDrop());
+            }
+        }
+
+        // アプリケーション初期化
+        window.onload = () => {
+            new TetrisGame();
+        };
+    </script>
+</body>
+</html>

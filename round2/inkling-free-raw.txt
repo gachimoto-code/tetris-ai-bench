@@ -1,0 +1,183 @@
+もちろんです！ブラウザでそのまま遊べる簡易版テトリスを作るので、下のコードを保存して開いてみてください。
+
+**やり方**
+1. このコードをテキストエディタで開く
+2. ファイル名を **`tetris.html`** で保存（右クリック→「名前を付けて保存」でブラウザタイプを選択）
+3. そのファイルをダブルクリックして開く
+
+```html
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>テトリス</title>
+<style>
+  body { background:#1e1e2e; color:#fff; font-family:sans-serif; display:flex; flex-direction:column; align-items:center; margin-top:20px; }
+  canvas { border:3px solid #fff; background:#000; }
+  #score { font-size:1.4em; margin:10px 0 4px; }
+  #msg { color:#ff5577; min-height:1.5em; font-weight:bold; }
+  p { font-size:0.9em; opacity:0.8; }
+</style>
+</head>
+<body>
+<h1>テトリス</h1>
+<canvas id="cv" width="300" height="600"></canvas>
+<div id="score">スコア: 0</div>
+<div id="msg"></div>
+<p>← → : 移動　↓ : ソフトドロップ　↑ : 回転　Space : ハードドロップ</p>
+
+<script>
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+const COLS = 10, ROWS = 20, CELL = 30;
+const COLORS = ['#000','#00f0f0','#f0e000','#b040f0','#40e040','#f04040','#4040f0','#f0a020'];
+
+// 形状（セル相対座標）
+const PIECES = [
+  { cells: [[0,1],[1,1],[2,1],[3,1]], color: 1 },
+  { cells: [[1,0],[2,0],[1,1],[2,1]], color: 2 },
+  { cells: [[1,0],[0,1],[1,1],[2,1]], color: 3 },
+  { cells: [[1,0],[2,0],[0,1],[1,1]], color: 4 },
+  { cells: [[0,0],[1,0],[1,1],[2,1]], color: 5 },
+  { cells: [[0,0],[0,1],[1,1],[2,1]], color: 6 },
+  { cells: [[2,0],[0,1],[1,1],[2,1]], color: 7 }
+];
+
+let grid, piece, px, py, score, gameOver, interval;
+
+function randomPiece() {
+  const p = PIECES[Math.floor(Math.random() * PIECES.length)];
+  return { cells: p.cells.map(c => [...c]), color: p.color };
+}
+
+function spawn() {
+  piece = randomPiece();
+  const maxX = Math.max(...piece.cells.map(c => c[0]));
+  const minX = Math.min(...piece.cells.map(c => c[0]));
+  const width = maxX - minX + 1;
+  px = Math.floor((COLS - width) / 2);
+  py = 0;
+  if (collide(piece.cells, px, py)) {
+    gameOver = true;
+    clearInterval(interval);
+    document.getElementById('msg').textContent = 'ゲームオーバー！';
+  }
+}
+
+function collide(cells, ox, oy) {
+  for (const [cx, cy] of cells) {
+    const x = ox + cx, y = oy + cy;
+    if (x < 0 || x >= COLS || y >= ROWS) return true;
+    if (y >= 0 && grid[y][x]) return true;
+  }
+  return false;
+}
+
+function rotate() {
+  const rot = piece.cells.map(([x, y]) => [y, -x]);
+  const minx = Math.min(...rot.map(c => c[0]));
+  const miny = Math.min(...rot.map(c => c[1]));
+  const norm = rot.map(([x, y]) => [x - minx, y - miny]);
+  if (!collide(norm, px, py)) {
+    piece.cells = norm;
+  } else if (!collide(norm, px - 1, py)) {
+    piece.cells = norm; px--;
+  }
+}
+
+function draw() {
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, cv.width, cv.height);
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      if (grid[y][x]) {
+        ctx.fillStyle = COLORS[grid[y][x]];
+        ctx.fillRect(x * CELL, y * CELL, CELL - 1, CELL - 1);
+      }
+    }
+  }
+  if (piece && !gameOver) {
+    ctx.fillStyle = COLORS[piece.color];
+    for (const [dx, dy] of piece.cells) {
+      const x = px + dx, y = py + dy;
+      if (y >= 0) ctx.fillRect(x * CELL, y * CELL, CELL - 1, CELL - 1);
+    }
+  }
+}
+
+function lockPiece() {
+  for (const [dx, dy] of piece.cells) {
+    const x = px + dx, y = py + dy;
+    if (y >= 0) grid[y][x] = piece.color;
+  }
+  let lines = 0;
+  let y = ROWS - 1;
+  while (y >= 0) {
+    if (grid[y].every(c => c)) {
+      grid.splice(y, 1);
+      grid.unshift(Array(COLS).fill(0));
+      lines++;
+    } else {
+      y--;
+    }
+  }
+  if (lines > 0) {
+    score += lines * 100 * lines;
+    document.getElementById('score').textContent = `スコア: ${score}`;
+  }
+  spawn();
+  if (gameOver) clearInterval(interval);
+}
+
+function moveDown() {
+  if (gameOver) return;
+  if (!collide(piece.cells, px, py + 1)) {
+    py++;
+  } else {
+    lockPiece();
+  }
+  draw();
+}
+
+function hardDrop() {
+  if (gameOver) return;
+  while (!collide(piece.cells, px, py + 1)) py++;
+  lockPiece();
+  draw();
+}
+
+document.addEventListener('keydown', e => {
+  if (gameOver) return;
+  switch (e.key) {
+    case 'ArrowLeft': if (!collide(piece.cells, px - 1, py)) px--; break;
+    case 'ArrowRight': if (!collide(piece.cells, px + 1, py)) px++; break;
+    case 'ArrowDown':
+      if (!collide(piece.cells, px, py + 1)) py++;
+      else lockPiece();
+      break;
+    case 'ArrowUp': rotate(); break;
+    case ' ': hardDrop(); break;
+    default: return;
+  }
+  e.preventDefault();
+  draw();
+});
+
+function init() {
+  grid = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
+  score = 0;
+  gameOver = false;
+  document.getElementById('score').textContent = 'スコア: 0';
+  document.getElementById('msg').textContent = '';
+  spawn();
+  interval = setInterval(moveDown, 500);
+  draw();
+}
+
+init();
+</script>
+</body>
+</html>
+```
+
+遊び方は標準的なテトリスです。必要ならスコア表示を改善したり、次番のピースプレビュー、落ち速度の上昇なども追加できますよ。

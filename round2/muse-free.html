@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>テトリス（Muse 自由演技版）</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,sans-serif;background:#f6f7fb;color:#111;display:flex;justify-content:center;padding:20px}
+.wrap{display:flex;gap:16px;justify-content:center;align-items:flex-start;flex-wrap:wrap}
+.side{display:flex;flex-direction:column;gap:12px;min-width:130px}
+.box{background:#fff;border:1px solid #ddd;border-radius:12px;padding:10px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+.box h4{margin:0 0 8px;font-size:11px;letter-spacing:.12em;color:#666}
+.val{font-size:22px;font-weight:800;line-height:1}
+canvas{display:block;margin:0 auto}
+#board{background:#0f1220;border-radius:8px;border:2px solid #ddd}
+button{background:#fff;color:#111;border:1px solid #ccc;border-radius:999px;padding:8px 14px;cursor:pointer;font-weight:600}
+button.accent{background:#4361ee;color:#fff;border-color:transparent}
+.controls{font-size:12px;color:#666;line-height:1.7;text-align:left}
+.touch{display:none;gap:6px;justify-content:center;margin-top:10px;flex-wrap:wrap}
+@media(pointer:coarse){.touch{display:flex}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="side">
+    <div class="box"><h4>HOLD (C)</h4><canvas id="hold" width="96" height="64"></canvas></div>
+    <div class="box"><h4>SCORE</h4><div class="val" id="score">0</div><div style="margin-top:10px;font-size:12px;color:#666">LINES <b id="lines" style="color:#111">0</b> &nbsp; LV <b id="level" style="color:#111">1</b></div></div>
+    <div class="box controls">←→ 移動<br>↓ ソフトドロップ<br>↑ 回転 / Space ハード<br>C ホールド / P 一時停止<br>Enter リスタート</div>
+  </div>
+  <div style="text-align:center">
+    <div style="position:relative;display:inline-block">
+      <canvas id="board" width="300" height="600" tabindex="0"></canvas>
+      <div id="overlay" style="position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;background:rgba(0,0,0,.72);color:#fff;border-radius:8px;text-align:center;padding:20px">
+        <div id="ovTitle" style="font-size:28px;font-weight:900">GAME OVER</div>
+        <div id="ovSub" style="margin:10px 0 16px;opacity:.9;font-size:14px"></div>
+        <button class="accent" onclick="restart()">もう一度遊ぶ</button>
+      </div>
+    </div>
+    <div class="touch">
+      <button onclick="act('left')">←</button><button onclick="act('right')">→</button><button onclick="act('down')">↓</button><button onclick="act('rotate')">↻</button><button onclick="act('hard')">⤓</button><button onclick="act('hold')">HOLD</button>
+    </div>
+    <div style="margin-top:10px;display:flex;gap:8px;justify-content:center"><button onclick="togglePause()">⏸ 一時停止</button><button onclick="restart()">↺ リスタート</button></div>
+  </div>
+  <div class="side"><div class="box"><h4>NEXT</h4><canvas id="next" width="96" height="192"></canvas></div></div>
+</div>
+<script>
+const COLS=10,ROWS=20,S=30;
+const COLORS={I:'#00c2d1',O:'#f7c948',T:'#9b7bea',S:'#2ecc71',Z:'#ef476f',J:'#4361ee',L:'#fb8500'};
+const SHAPES={I:[[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]],O:[[1,1],[1,1]],T:[[0,1,0],[1,1,1],[0,0,0]],S:[[0,1,1],[1,1,0],[0,0,0]],Z:[[1,1,0],[0,1,1],[0,0,0]],J:[[1,0,0],[1,1,1],[0,0,0]],L:[[0,0,1],[1,1,1],[0,0,0]]};
+let boardC=document.getElementById('board'),ctx=boardC.getContext('2d');
+let grid,queue,bag,cur,holdPiece,canHold,score,lines,level,dropMs,last,acc,paused,over,raf;
+function newBag(){let a=Object.keys(SHAPES);for(let i=a.length-1;i>0;i--){let j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+function nextType(){if(queue.length<7)queue.push(...newBag());return queue.shift()}
+function spawn(){let t=nextType();cur={t,m:SHAPES[t].map(r=>[...r]),x:3,y:t==='I'?-1:0};canHold=true;if(collide(cur,0,0))gameOver()}
+function collide(p,dx,dy,m){m=m||p.m;for(let y=0;y<m.length;y++)for(let x=0;x<m[y].length;x++)if(m[y][x]){let nx=p.x+x+dx,ny=p.y+y+dy;if(nx<0||nx>=COLS||ny>=ROWS||(ny>=0&&grid[ny][nx]))return true}return false}
+function merge(){cur.m.forEach((r,y)=>r.forEach((v,x)=>{if(v&&cur.y+y>=0)grid[cur.y+y][cur.x+x]=cur.t}));clearLines();spawn()}
+function clearLines(){let c=0;for(let y=ROWS-1;y>=0;y--){if(grid[y].every(Boolean)){grid.splice(y,1);grid.unshift(Array(COLS).fill(null));c++;y++}}if(c){score+=[0,100,300,500,800][c];lines+=c;level=Math.floor(lines/10)+1;dropMs=Math.max(80,1000-(level-1)*85);updateHUD()}}
+function rotate(){let m=cur.m[0].map((_,i)=>cur.m.map(r=>r[i]).reverse());let kicks=[0,-1,1,-2,2];for(let k of kicks)if(!collide(cur,k,0,m)){cur.x+=k;cur.m=m;break}}
+function ghostY(){let y=0;while(!collide(cur,0,y+1))y++;return cur.y+y}
+function drawCell(c,x,y,s,col,alpha){c.globalAlpha=alpha==null?1:alpha;c.fillStyle=col;c.fillRect(x*s+1,y*s+1,s-2,s-2);c.fillStyle='rgba(255,255,255,.22)';c.fillRect(x*s+1,y*s+1,s-2,6);c.globalAlpha=1}
+function drawPiece(c,p,ox,oy,s,ghost){p.m.forEach((r,y)=>r.forEach((v,x)=>{if(v){let px=ox+(p.x+x)*s,py=oy+(p.y+y)*s;if(py<0)return;drawCell(c,px/s,py/s,s,COLORS[p.t],ghost?0.28:1)}}))}
+function render(){ctx.clearRect(0,0,300,600);ctx.fillStyle='#0f1220';ctx.fillRect(0,0,300,600);ctx.strokeStyle='rgba(255,255,255,.06)';for(let i=1;i<COLS;i++){ctx.beginPath();ctx.moveTo(i*S,0);ctx.lineTo(i*S,600);ctx.stroke()}for(let i=1;i<ROWS;i++){ctx.beginPath();ctx.moveTo(0,i*S);ctx.lineTo(300,i*S);ctx.stroke()}
+grid.forEach((r,y)=>r.forEach((v,x)=>{if(v)drawCell(ctx,x,y,S,COLORS[v])}));
+if(cur&&!over){let gy=ghostY();drawPiece(ctx,{...cur,y:gy},0,0,S,true);drawPiece(ctx,cur,0,0,S,false)}
+drawMini('hold',holdPiece);drawNext()}
+function drawMini(id,t){let cv=document.getElementById(id),c=cv.getContext('2d');c.clearRect(0,0,cv.width,cv.height);if(!t)return;let m=SHAPES[t],s=20,w=m[0].length*s,h=m.length*s;let ox=(cv.width-w)/2,oy=(cv.height-h)/2;m.forEach((r,y)=>r.forEach((v,x)=>{if(v)drawCell(c,ox/s+x,oy/s+y,s,COLORS[t])}))}
+function drawNext(){let cv=document.getElementById('next'),c=cv.getContext('2d');c.clearRect(0,0,96,192);queue.slice(0,3).forEach((t,i)=>{let m=SHAPES[t],s=18,w=m[0].length*s;let ox=(96-w)/2,oy=12+i*60;m.forEach((r,y)=>r.forEach((v,x)=>{if(v)drawCell(c,ox/s+x,oy/s+y+(i*60)/s,s,COLORS[t])}))})}
+function updateHUD(){document.getElementById('score').textContent=score;document.getElementById('lines').textContent=lines;document.getElementById('level').textContent=level}
+function step(ts){if(paused||over)return;if(!last)last=ts;acc+=ts-last;last=ts;if(acc>dropMs){acc=0;if(!collide(cur,0,1))cur.y++;else merge()}render();raf=requestAnimationFrame(step)}
+function restart(){grid=Array.from({length:ROWS},()=>Array(COLS).fill(null));queue=[];holdPiece=null;score=0;lines=0;level=1;dropMs=1000;acc=0;last=0;paused=false;over=false;document.getElementById('overlay').style.display='none';updateHUD();spawn();cancelAnimationFrame(raf);raf=requestAnimationFrame(step);boardC.focus()}
+function gameOver(){over=true;let o=document.getElementById('overlay');o.style.display='flex';document.getElementById('ovTitle').textContent='GAME OVER';document.getElementById('ovSub').textContent='SCORE '+score+' / '+lines+' lines';render()}
+function togglePause(){if(over)return;paused=!paused;let o=document.getElementById('overlay');if(paused){o.style.display='flex';document.getElementById('ovTitle').textContent='PAUSED';document.getElementById('ovSub').textContent='Pキーで再開'}else{o.style.display='none';last=0;raf=requestAnimationFrame(step)}}
+function doHold(){if(!canHold||over)return;let t=cur.t;if(holdPiece){cur={t:holdPiece,m:SHAPES[holdPiece].map(r=>[...r]),x:3,y:0};if(collide(cur,0,0))gameOver()}else{spawn()}holdPiece=t;canHold=false;render()}
+function act(a){if(over)return;if(a==='left'&&!collide(cur,-1,0))cur.x--;if(a==='right'&&!collide(cur,1,0))cur.x++;if(a==='down'){if(!collide(cur,0,1)){cur.y++;score+=1}else merge();updateHUD()}if(a==='rotate')rotate();if(a==='hard'){let gy=ghostY();score+=(gy-cur.y)*2;cur.y=gy;merge();updateHUD()}if(a==='hold')doHold();render()}
+document.addEventListener('keydown',e=>{if(e.key==='Enter'){restart();return}if(e.key.toLowerCase()==='p'){togglePause();return}if(paused||over)return;let k=e.key;if(k==='ArrowLeft'){act('left');e.preventDefault()}else if(k==='ArrowRight'){act('right');e.preventDefault()}else if(k==='ArrowDown'){act('down');e.preventDefault()}else if(k==='ArrowUp'){act('rotate');e.preventDefault()}else if(k===' '){act('hard');e.preventDefault()}else if(k.toLowerCase()==='c'){act('hold')}});
+restart();
+</script>
+</body>
+</html>
