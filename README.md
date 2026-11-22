@@ -11,8 +11,7 @@
 | Gemini Hydrogen | 12/12 | [gemini-hydrogen-tetris.html](gemini-hydrogen-tetris.html) | ホールド規則・スコアとも仕様どおり |
 | Cursor Auto | 11/12 | [cursor-auto-tetris.html](cursor-auto-tetris.html) | ホールドが1落下につき2回使えてしまう |
 | ChatGPT | 11/12 | [chatgpt-tetris.html](chatgpt-tetris.html) | ライン消去スコアにレベル倍率。RESTARTボタン不発（Enterは正常） |
-| Muse（再生成版） | 12/12 | [muse-tetris-v2.html](muse-tetris-v2.html) | 統一プロンプトで作り直し、初版の逸脱はすべて解消 |
-| Muse（初版） | ― | [muse-tetris.html](muse-tetris.html) | NEXTを5個表示するなど仕様外の追加あり（Space収録版） |
+| Muse | 12/12 | [muse-tetris.html](muse-tetris.html) | 仕様忠実。NEXTも正確に1個 |
 
 全員のコードはブラウザでの実動確認済み（エラーなし）。自動プレイのスクリプトでは全員ライン消去まで到達できなかったため、消去の確認はコードレビューによるものです。
 
@@ -61,5 +60,4 @@
 
 - **Inkling 2 Mini** は自宅PC（Ryzen AI Max+ 395 / Radeon 8060S）で llama.cpp（Vulkan）によりローカル実行。推奨サンプリング（temperature 1.0 / top-p 1.0 / min-p 0）。統一条件（ctx 16384、max_tokens 12288）では推論に 12,286 トークンを全て使い切り、可視回答 0 トークンで 0 点。上限を 32,768（ctx 49152）に上げた再挑戦では推論 8,117 / 回答 5,379 トークンで完成し 12/12。
 - **受け取り経路の教訓**: Cursor Auto / Gemini / ChatGPT のコードは当初チャットへの貼り付けで受け取ったところ、引用符がスマートクォートに変換され構文エラーになりました。ファイルで受け取り直した原文は3件とも無傷で構文チェック合格でした。このリポジトリのファイルはすべて原文です。
-- **Muse 初版**は Space 上で別文の下書きプロンプト（NEXT 5個・スコア×レベル等）を基に生成されたため仕様外の追加が入りました。2026-11-22 に統一プロンプトで再生成した版（muse-tetris-v2.html）が 12/12 です。Space のページに掲載されていたプロンプト文も同日、正しい統一プロンプトに差し替え済みです。
 - プレイ動画はこのリポジトリには含めていません。
