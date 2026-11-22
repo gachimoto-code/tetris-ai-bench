@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>tetris-ai-bench — 6つのAIのテトリス実装</title>
+<style>
+  body { margin:0; min-height:100vh; background:#0f1218; color:#e8ecf4; font-family:"Segoe UI","Hiragino Sans",sans-serif; display:flex; justify-content:center; padding:32px 16px; box-sizing:border-box; }
+  main { max-width:720px; width:100%; }
+  h1 { font-size:24px; margin:0 0 8px; }
+  p { color:#8b9bb4; line-height:1.7; }
+  ul { list-style:none; padding:0; display:grid; gap:12px; margin-top:24px; }
+  li a { display:flex; justify-content:space-between; align-items:center; background:#1a2030; border:2px solid #2a3548; border-radius:10px; padding:16px 20px; color:#e8ecf4; text-decoration:none; }
+  li a:hover { border-color:#0ea5e9; }
+  .score { color:#4ade80; font-weight:700; font-variant-numeric:tabular-nums; }
+  .note { color:#8b9bb4; font-size:13px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>tetris-ai-bench</h1>
+  <p>6つのAIに同じプロンプトでテトリスを作らせ、12項目チェックリストで採点しました。各リンク先がそのまま遊べます。詳細は <a href="https://github.com/gachimoto-code/tetris-ai-bench" style="color:#38bdf8">README</a> をご覧ください。</p>
+  <ul>
+    <li><a href="opus-55-tetris.html">Claude Opus 5.5 <span class="score">12/12</span></a></li>
+    <li><a href="inkling-tetris-32k.html">Inkling 2 Mini（32k条件） <span class="score">12/12</span></a></li>
+    <li><a href="gemini-hydrogen-tetris.html">Gemini Hydrogen <span class="score">12/12</span></a></li>
+    <li><a href="cursor-auto-tetris.html">Cursor Auto <span class="score">11/12</span></a></li>
+    <li><a href="chatgpt-tetris.html">ChatGPT <span class="score">11/12</span></a></li>
+    <li><a href="muse-tetris.html">Muse <span class="note">NEXT 5個表示など仕様外の追加あり</span></a></li>
+  </ul>
+</main>
+</body>
+</html>

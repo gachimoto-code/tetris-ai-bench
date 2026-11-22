@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tetris</title>
+<style>
+  *{box-sizing:border-box;}
+  body{
+    margin:0;min-height:100vh;background:#12131a;color:#e8e8ec;
+    font-family:'Segoe UI','Hiragino Kaku Gothic ProN',sans-serif;
+    display:flex;flex-direction:column;justify-content:center;align-items:center;
+    gap:14px;padding:20px;
+  }
+  h1{margin:0;font-size:26px;letter-spacing:4px;color:#ffd75e;text-shadow:0 2px 8px rgba(255,215,94,.3);}
+  .wrap{display:flex;gap:18px;align-items:flex-start;}
+  canvas{border:2px solid #2a2d3a;border-radius:8px;background:#16171f;box-shadow:0 6px 24px rgba(0,0,0,.5);}
+</style>
+</head>
+<body>
+<h1>TETRIS</h1>
+<div class="wrap">
+  <canvas id="game" width="300" height="600"></canvas>
+  <canvas id="side" width="200" height="600"></canvas>
+</div>
+
+<script>
+'use strict';
+
+// ===== 定数 =====
+const COLS = 10, ROWS = 20, CELL = 30;
+const COLORS = {
+  I:'#00e5e5', O:'#ffe600', T:'#c04dff', S:'#3aff5c',
+  Z:'#ff4d4d', J:'#4d6bff', L:'#ff9f2e'
+};
+const SHAPES = {
+  I: [[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]],
+  O: [[1,1],[1,1]],
+  T: [[0,1,0],[1,1,1],[0,0,0]],
+  S: [[0,1,1],[1,1,0],[0,0,0]],
+  Z: [[1,1,0],[0,1,1],[0,0,0]],
+  J: [[1,0,0],[1,1,1],[0,0,0]],
+  L: [[0,0,1],[1,1,1],[0,0,0]]
+};
+const TYPES = ['I','O','T','S','Z','J','L'];
+const SCORE_TABLE = [0, 100, 300, 500, 800];
+
+// ===== Canvas =====
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const side = document.getElementById('side');
+const sctx = side.getContext('2d');
+canvas.width = COLS * CELL;
+canvas.height = ROWS * CELL;
+
+// ===== 状態 =====
+let board, bag, current, nextType, holdType, canHold;
+let score, lines, level, paused, gameOver;
+let dropTime, lastTime, softDropTime;
+const keys = {};
+
+// ===== ユーティリティ =====
+function refillBag(){
+  bag = [...TYPES];
+  for(let i = bag.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    [bag[i], bag[j]] = [bag[j], bag[i]];
+  }
+}
+function nextFromBag(){
+  if(bag.length === 0) refillBag();
+  return bag.pop();
+}
+function rotateMatrix(m){
+  const n = m.length;
+  const out = Array.from({length:n}, () => Array(n).fill(0));
+  for(let y = 0; y < n; y++)
+    for(let x = 0; x < n; x++)
+      out[x][n - 1 - y] = m[y][x];
+  return out;
+}
+function newPiece(type){
+  const m = SHAPES[type].map(r => r.slice());
+  const size = m.length;
+  return { type, cells: m, x: Math.floor((COLS - size) / 2), y: 0 };
+}
+
+// ===== 衝突判定 =====
+function collide(cells, px, py){
+  for(let y = 0; y < cells.length; y++){
+    for(let x = 0; x < cells[y].length; x++){
+      if(!cells[y][x]) continue;
+      const nx = px + x, ny = py + y;
+      if(nx < 0 || nx >= COLS || ny >= ROWS) return true;
+      if(ny >= 0 && board[ny][nx]) return true;
+    }
+  }
+  return false;
+}
+
+// ===== ゲーム制御 =====
+function reset(){
+  board = Array.from({length: ROWS}, () => Array(COLS).fill(null));
+  bag = [];
+  score = 0; lines = 0; level = 1;
+  paused = false; gameOver = false;
+  holdType = null; canHold = true;
+  dropTime = 0; softDropTime = 0;
+  lastTime = performance.now();
+  nextType = nextFromBag();
+  spawn();
+}
+function spawn(){
+  current = newPiece(nextType);
+  nextType = nextFromBag();
+  if(collide(current.cells, current.x, current.y)) gameOver = true;
+}
+function moveDown(){
+  if(!collide(current.cells, current.x, current.y + 1)){
+    current.y++;
+    if(keys['ArrowDown']) score++;
+  } else {
+    lockPiece();
+  }
+}
+function hardDrop(){
+  let d = 0;
+  while(!collide(current.cells, current.x, current.y + 1)){ current.y++; d++; }
+  score += d * 2;
+  lockPiece();
+}
+function tryRotate(){
+  const rotated = rotateMatrix(current.cells);
+  const kicks = [[0,0],[-1,0],[1,0],[-2,0],[2,0],[0,1],[-1,1],[1,1]];
+  for(const [kx, ky] of kicks){
+    if(!collide(rotated, current.x + kx, current.y + ky)){
+      current.cells = rotated;
+      current.x += kx;
+      current.y += ky;
+      return;
+    }
+  }
+}
+function holdPiece(){
+  if(!canHold || gameOver || paused || !current) return;
+  const curType = current.type;
+  if(holdType === null){
+    holdType = curType;
+    current = newPiece(nextType);
+    nextType = nextFromBag();
+  } else {
+    const t = holdType;
+    holdType = curType;
+    current = newPiece(t);
+  }
+  canHold = false;
+  if(collide(current.cells, current.x, current.y)) gameOver = true;
+}
+function lockPiece(){
+  for(let y = 0; y < current.cells.length; y++){
+    for(let x = 0; x < current.cells[y].length; x++){
+      if(!current.cells[y][x]) continue;
+      const ny = current.y + y, nx = current.x + x;
+      if(ny >= 0) board[ny][nx] = current.type;
+    }
+  }
+  let count = 0;
+  for(let y = ROWS - 1; y >= 0; y--){
+    if(board[y].every(c => c)){
+      board.splice(y, 1);
+      board.unshift(Array(COLS).fill(null));
+      count++;
+      y++;
+    }
+  }
+  if(count > 0){
+    lines += count;
+    level = Math.floor(lines / 10) + 1;
+    score += SCORE_TABLE[count] || 0;
+  }
+  canHold = true;
+  dropTime = 0; softDropTime = 0;
+  spawn();
+}
+function dropInterval(){
+  return Math.max(80, 800 * Math.pow(0.82, level - 1));
+}
+
+// ===== 入力 =====
+window.addEventListener('keydown', e => {
+  if(['ArrowLeft','ArrowRight','ArrowDown','ArrowUp','Space'].includes(e.code)) e.preventDefault();
+  keys[e.code] = true;
+  if(e.repeat) return;
+  if(e.code === 'Enter' && gameOver){ reset(); return; }
+  if(gameOver) return;
+  if(e.code === 'KeyP'){ paused = !paused; return; }
+  if(paused) return;
+  if(e.code === 'ArrowLeft'){ if(!collide(current.cells, current.x - 1, current.y)) current.x--; }
+  else if(e.code === 'ArrowRight'){ if(!collide(current.cells, current.x + 1, current.y)) current.x++; }
+  else if(e.code === 'ArrowUp'){ tryRotate(); }
+  else if(e.code === 'Space'){ hardDrop(); }
+  else if(e.code === 'KeyC'){ holdPiece(); }
+});
+window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+// ===== 描画 =====
+function drawCell(c, x, y, color, cell, alpha){
+  const px = x * cell, py = y * cell;
+  c.globalAlpha = (alpha === undefined) ? 1 : alpha;
+  c.fillStyle = color;
+  c.fillRect(px + 1, py + 1, cell - 2, cell - 2);
+  c.fillStyle = 'rgba(255,255,255,0.28)';
+  c.fillRect(px + 1, py + 1, cell - 2, 4);
+  c.fillStyle = 'rgba(0,0,0,0.28)';
+  c.fillRect(px + 1, py + cell - 5, cell - 2, 4);
+  c.globalAlpha = 1;
+}
+function ghostY(){
+  let gy = current.y;
+  while(!collide(current.cells, current.x, gy + 1)) gy++;
+  return gy;
+}
+function draw(){
+  // フィールド
+  ctx.fillStyle = '#16171f';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+  ctx.lineWidth = 1;
+  for(let x = 1; x < COLS; x++){ ctx.beginPath(); ctx.moveTo(x * CELL, 0); ctx.lineTo(x * CELL, canvas.height); ctx.stroke(); }
+  for(let y = 1; y < ROWS; y++){ ctx.beginPath(); ctx.moveTo(0, y * CELL); ctx.lineTo(canvas.width, y * CELL); ctx.stroke(); }
+
+  for(let y = 0; y < ROWS; y++)
+    for(let x = 0; x < COLS; x++)
+      if(board[y][x]) drawCell(ctx, x, y, COLORS[board[y][x]], CELL);
+
+  if(current && !gameOver){
+    const gy = ghostY();
+    if(gy !== current.y){
+      for(let y = 0; y < current.cells.length; y++)
+        for(let x = 0; x < current.cells[y].length; x++)
+          if(current.cells[y][x]){
+            const ny = gy + y;
+            if(ny >= 0) drawCell(ctx, current.x + x, ny, COLORS[current.type], CELL, 0.18);
+          }
+    }
+    for(let y = 0; y < current.cells.length; y++)
+      for(let x = 0; x < current.cells[y].length; x++)
+        if(current.cells[y][x]){
+          const ny = current.y + y;
+          if(ny >= 0) drawCell(ctx, current.x + x, ny, COLORS[current.type], CELL);
+        }
+  }
+
+  if(paused && !gameOver){
+    ctx.fillStyle = 'rgba(10,10,16,0.7)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffd75e';
+    ctx.font = 'bold 36px sans-serif';
+    ctx.fillText('PAUSED', canvas.width / 2, canvas.height / 2 - 8);
+    ctx.fillStyle = '#e8e8ec';
+    ctx.font = '15px sans-serif';
+    ctx.fillText('Pキーで再開', canvas.width / 2, canvas.height / 2 + 28);
+  }
+  if(gameOver){
+    ctx.fillStyle = 'rgba(10,10,16,0.78)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ff4d4d';
+    ctx.font = 'bold 34px sans-serif';
+    ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2 - 20);
+    ctx.fillStyle = '#e8e8ec';
+    ctx.font = '15px sans-serif';
+    ctx.fillText('Enterキーでリスタート', canvas.width / 2, canvas.height / 2 + 22);
+  }
+
+  drawSide();
+}
+function drawPreview(type, cx, cy, cell){
+  if(!type){
+    sctx.fillStyle = '#4a4d5c';
+    sctx.font = '13px sans-serif';
+    sctx.textAlign = 'center';
+    sctx.fillText('BLANK', cx, cy + 4);
+    return;
+  }
+  const cells = SHAPES[type];
+  let minX = Infinity, minY = Infinity, maxX = -1, maxY = -1;
+  for(let y = 0; y < cells.length; y++)
+    for(let x = 0; x < cells[y].length; x++)
+      if(cells[y][x]){
+        if(x < minX) minX = x; if(x > maxX) maxX = x;
+        if(y < minY) minY = y; if(y > maxY) maxY = y;
+      }
+  const w = (maxX - minX + 1) * cell, h = (maxY - minY + 1) * cell;
+  const ox = cx - w / 2, oy = cy - h / 2;
+  for(let y = minY; y <= maxY; y++)
+    for(let x = minX; x <= maxX; x++)
+      if(cells[y][x]) drawCell(sctx, (ox + (x - minX) * cell) / cell, (oy + (y - minY) * cell) / cell, COLORS[type], cell);
+}
+function drawSide(){
+  sctx.fillStyle = '#16171f';
+  sctx.fillRect(0, 0, side.width, side.height);
+  sctx.textAlign = 'left';
+
+  sctx.fillStyle = '#8b8fa3';
+  sctx.font = 'bold 12px sans-serif';
+  sctx.fillText('SCORE', 18, 34);
+  sctx.fillStyle = '#ffd75e';
+  sctx.font = 'bold 24px "Consolas", monospace';
+  sctx.fillText(String(score).padStart(6, '0'), 18, 62);
+
+  sctx.fillStyle = '#8b8fa3';
+  sctx.font = 'bold 12px sans-serif';
+  sctx.fillText('LINES', 18, 98);
+  sctx.fillStyle = '#e8e8ec';
+  sctx.font = 'bold 20px "Consolas", monospace';
+  sctx.fillText(String(lines), 18, 122);
+
+  sctx.fillStyle = '#8b8fa3';
+  sctx.font = 'bold 12px sans-serif';
+  sctx.fillText('LEVEL', 18, 152);
+  sctx.fillStyle = '#e8e8ec';
+  sctx.font = 'bold 20px "Consolas", monospace';
+  sctx.fillText(String(level), 18, 176);
+
+  // HOLD
+  sctx.fillStyle = '#8b8fa3';
+  sctx.font = 'bold 12px sans-serif';
+  sctx.fillText('HOLD', 18, 216);
+  sctx.strokeStyle = '#2a2d3a';
+  sctx.lineWidth = 2;
+  sctx.strokeRect(28, 228, 144, 96);
+  drawPreview(holdType, 100, 276, 22);
+
+  // NEXT
+  sctx.fillStyle = '#8b8fa3';
+  sctx.font = 'bold 12px sans-serif';
+  sctx.fillText('NEXT', 18, 352);
+  sctx.strokeStyle = '#2a2d3a';
+  sctx.lineWidth = 2;
+  sctx.strokeRect(28, 364, 144, 96);
+  drawPreview(nextType, 100, 412, 22);
+
+  // 操作説明
+  sctx.fillStyle = '#8b8fa3';
+  sctx.font = '11px sans-serif';
+  const cmds = [
+    '← → : 移動',
+    '↑ : 回転',
+    '↓ : ソフトドロップ',
+    'Space : ハードドロップ',
+    'C : ホールド',
+    'P : 一時停止 / 再開',
+    'Enter : リスタート'
+  ];
+  cmds.forEach((t, i) => sctx.fillText(t, 18, 496 + i * 15));
+}
+
+// ===== メインループ =====
+function loop(now){
+  requestAnimationFrame(loop);
+  const dt = now - lastTime;
+  lastTime = now;
+  if(!paused && !gameOver && current){
+    if(keys['ArrowDown']){
+      softDropTime += dt;
+      if(softDropTime >= 40){
+        softDropTime = 0;
+        moveDown();
+      }
+      dropTime = 0;
+    } else {
+      dropTime += dt;
+      if(dropTime >= dropInterval()){
+        dropTime = 0;
+        moveDown();
+      }
+    }
+  }
+  draw();
+}
+
+reset();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

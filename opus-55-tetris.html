@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>Tetris</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #0e0f14;
+    color: #e8e8f0;
+    font-family: "Segoe UI", "Hiragino Sans", sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+  }
+  #wrap { display: flex; gap: 20px; align-items: flex-start; }
+  .panel { display: flex; flex-direction: column; gap: 14px; width: 150px; }
+  .box {
+    background: #1a1c25;
+    border: 2px solid #33364a;
+    border-radius: 6px;
+    padding: 10px;
+  }
+  .box h3 {
+    margin: 0 0 6px;
+    font-size: 13px;
+    letter-spacing: 2px;
+    color: #8a8fb0;
+  }
+  canvas { display: block; background: #000; }
+  #field { border: 2px solid #555a78; border-radius: 4px; }
+  .stat { font-size: 22px; font-weight: bold; font-variant-numeric: tabular-nums; }
+  .help { font-size: 12px; color: #9aa; line-height: 1.8; }
+  .help b { color: #dde; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div class="panel">
+    <div class="box">
+      <h3>HOLD</h3>
+      <canvas id="hold" width="126" height="100"></canvas>
+    </div>
+    <div class="box help">
+      <b>← →</b> 移動<br>
+      <b>↓</b> ソフトドロップ<br>
+      <b>↑</b> 回転<br>
+      <b>Space</b> ハードドロップ<br>
+      <b>C</b> ホールド<br>
+      <b>P</b> 一時停止/再開<br>
+      <b>Enter</b> リスタート
+    </div>
+  </div>
+
+  <canvas id="field" width="300" height="600"></canvas>
+
+  <div class="panel">
+    <div class="box">
+      <h3>NEXT</h3>
+      <canvas id="next" width="126" height="100"></canvas>
+    </div>
+    <div class="box"><h3>SCORE</h3><div class="stat" id="score">0</div></div>
+    <div class="box"><h3>LINES</h3><div class="stat" id="lines">0</div></div>
+    <div class="box"><h3>LEVEL</h3><div class="stat" id="level">1</div></div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const COLS = 10, ROWS = 20, SZ = 30;
+
+  const SHAPES = {
+    I: [[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]],
+    O: [[1,1],[1,1]],
+    T: [[0,1,0],[1,1,1],[0,0,0]],
+    S: [[0,1,1],[1,1,0],[0,0,0]],
+    Z: [[1,1,0],[0,1,1],[0,0,0]],
+    J: [[1,0,0],[1,1,1],[0,0,0]],
+    L: [[0,0,1],[1,1,1],[0,0,0]]
+  };
+  const COLORS = {
+    I: "#00e5f0", O: "#f5e000", T: "#a740f0", S: "#30e040",
+    Z: "#f03030", J: "#2f6bff", L: "#f59a00"
+  };
+  const LINE_SCORES = [0, 100, 300, 500, 800];
+
+  const fieldCtx = document.getElementById("field").getContext("2d");
+  const nextCtx  = document.getElementById("next").getContext("2d");
+  const holdCtx  = document.getElementById("hold").getContext("2d");
+  const scoreEl  = document.getElementById("score");
+  const linesEl  = document.getElementById("lines");
+  const levelEl  = document.getElementById("level");
+
+  let board, bag, current, nextType, holdType, canHold;
+  let score, lines, level, paused, gameOver;
+  let dropAcc = 0, lastTime = 0;
+
+  // ---------- utilities ----------
+  const cloneMat = m => m.map(r => r.slice());
+  const rotateCW = m => m[0].map((_, i) => m.map(r => r[i]).reverse());
+
+  function refillBag() {
+    const types = Object.keys(SHAPES);
+    for (let i = types.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [types[i], types[j]] = [types[j], types[i]];
+    }
+    bag.push(...types);
+  }
+  function takeFromBag() {
+    if (bag.length === 0) refillBag();
+    return bag.shift();
+  }
+
+  function collide(mat, px, py) {
+    for (let r = 0; r < mat.length; r++) {
+      for (let c = 0; c < mat[r].length; c++) {
+        if (!mat[r][c]) continue;
+        const x = px + c, y = py + r;
+        if (x < 0 || x >= COLS || y >= ROWS) return true;
+        if (y >= 0 && board[y][x]) return true;
+      }
+    }
+    return false;
+  }
+
+  function dropInterval() {
+    return Math.max(60, 1000 * Math.pow(0.82, level - 1));
+  }
+
+  // ---------- game flow ----------
+  function spawn(type) {
+    const mat = cloneMat(SHAPES[type]);
+    current = {
+      type, mat,
+      x: Math.floor((COLS - mat[0].length) / 2),
+      y: type === "I" ? -1 : 0
+    };
+    if (collide(current.mat, current.x, current.y)) {
+      gameOver = true;
+    }
+    dropAcc = 0;
+  }
+
+  function spawnNext() {
+    spawn(nextType);
+    nextType = takeFromBag();
+  }
+
+  function lockPiece() {
+    const { mat, x, y, type } = current;
+    let overflow = false;
+    for (let r = 0; r < mat.length; r++) {
+      for (let c = 0; c < mat[r].length; c++) {
+        if (!mat[r][c]) continue;
+        const by = y + r;
+        if (by < 0) { overflow = true; continue; }
+        board[by][x + c] = type;
+      }
+    }
+    if (overflow) { gameOver = true; return; }
+
+    clearLines();
+    canHold = true;
+    spawnNext();
+  }
+
+  function clearLines() {
+    let cleared = 0;
+    for (let r = ROWS - 1; r >= 0; r--) {
+      if (board[r].every(v => v)) {
+        board.splice(r, 1);
+        board.unshift(Array(COLS).fill(null));
+        cleared++;
+        r++;
+      }
+    }
+    if (cleared > 0) {
+      score += LINE_SCORES[cleared];
+      lines += cleared;
+      level = Math.floor(lines / 10) + 1;
+      updateStats();
+    }
+  }
+
+  function updateStats() {
+    scoreEl.textContent = score;
+    linesEl.textContent = lines;
+    levelEl.textContent = level;
+  }
+
+  // ---------- actions ----------
+  function move(dx) {
+    if (!collide(current.mat, current.x + dx, current.y)) current.x += dx;
+  }
+
+  function softDrop() {
+    if (!collide(current.mat, current.x, current.y + 1)) {
+      current.y++;
+    } else {
+      lockPiece();
+    }
+    dropAcc = 0;
+  }
+
+  function hardDrop() {
+    while (!collide(current.mat, current.x, current.y + 1)) current.y++;
+    lockPiece();
+    dropAcc = 0;
+  }
+
+  function rotate() {
+    if (current.type === "O") return;
+    const rotated = rotateCW(current.mat);
+    const kicks = [0, -1, 1, -2, 2];
+    for (const k of kicks) {
+      if (!collide(rotated, current.x + k, current.y)) {
+        current.mat = rotated;
+        current.x += k;
+        return;
+      }
+    }
+    // try kicking upward (floor kick)
+    for (const k of kicks) {
+      if (!collide(rotated, current.x + k, current.y - 1)) {
+        current.mat = rotated;
+        current.x += k;
+        current.y -= 1;
+        return;
+      }
+    }
+  }
+
+  function hold() {
+    if (!canHold) return;
+    const curType = current.type;
+    if (holdType === null) {
+      holdType = curType;
+      spawnNext();
+    } else {
+      const t = holdType;
+      holdType = curType;
+      spawn(t);
+    }
+    canHold = false;
+  }
+
+  function ghostY() {
+    let gy = current.y;
+    while (!collide(current.mat, current.x, gy + 1)) gy++;
+    return gy;
+  }
+
+  // ---------- drawing ----------
+  function drawCell(ctx, x, y, size, color, alpha = 1) {
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = color;
+    ctx.fillRect(x, y, size, size);
+    ctx.fillStyle = "rgba(255,255,255,0.28)";
+    ctx.fillRect(x, y, size, size * 0.15);
+    ctx.fillRect(x, y, size * 0.15, size);
+    ctx.fillStyle = "rgba(0,0,0,0.3)";
+    ctx.fillRect(x, y + size * 0.85, size, size * 0.15);
+    ctx.fillRect(x + size * 0.85, y, size * 0.15, size);
+    ctx.strokeStyle = "rgba(0,0,0,0.6)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + 0.5, y + 0.5, size - 1, size - 1);
+    ctx.globalAlpha = 1;
+  }
+
+  function drawGrid() {
+    fieldCtx.strokeStyle = "#16182080";
+    fieldCtx.strokeStyle = "#1b1d27";
+    fieldCtx.lineWidth = 1;
+    for (let c = 1; c < COLS; c++) {
+      fieldCtx.beginPath();
+      fieldCtx.moveTo(c * SZ + 0.5, 0);
+      fieldCtx.lineTo(c * SZ + 0.5, ROWS * SZ);
+      fieldCtx.stroke();
+    }
+    for (let r = 1; r < ROWS; r++) {
+      fieldCtx.beginPath();
+      fieldCtx.moveTo(0, r * SZ + 0.5);
+      fieldCtx.lineTo(COLS * SZ, r * SZ + 0.5);
+      fieldCtx.stroke();
+    }
+  }
+
+  function drawPreview(ctx, type, dim) {
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    if (!type) return;
+    const mat = SHAPES[type];
+    let minR = 99, maxR = -1, minC = 99, maxC = -1;
+    mat.forEach((row, r) => row.forEach((v, c) => {
+      if (v) {
+        minR = Math.min(minR, r); maxR = Math.max(maxR, r);
+        minC = Math.min(minC, c); maxC = Math.max(maxC, c);
+      }
+    }));
+    const s = 24;
+    const w = (maxC - minC + 1) * s, h = (maxR - minR + 1) * s;
+    const ox = (ctx.canvas.width - w) / 2, oy = (ctx.canvas.height - h) / 2;
+    mat.forEach((row, r) => row.forEach((v, c) => {
+      if (v) drawCell(ctx, ox + (c - minC) * s, oy + (r - minR) * s, s, COLORS[type], dim ? 0.35 : 1);
+    }));
+  }
+
+  function drawOverlay(title, sub) {
+    fieldCtx.fillStyle = "rgba(0,0,0,0.7)";
+    fieldCtx.fillRect(0, 0, COLS * SZ, ROWS * SZ);
+    fieldCtx.textAlign = "center";
+    fieldCtx.fillStyle = "#fff";
+    fieldCtx.font = "bold 34px sans-serif";
+    fieldCtx.fillText(title, COLS * SZ / 2, ROWS * SZ / 2 - 10);
+    fieldCtx.font = "16px sans-serif";
+    fieldCtx.fillStyle = "#bbc";
+    fieldCtx.fillText(sub, COLS * SZ / 2, ROWS * SZ / 2 + 24);
+  }
+
+  function draw() {
+    fieldCtx.fillStyle = "#000";
+    fieldCtx.fillRect(0, 0, COLS * SZ, ROWS * SZ);
+    drawGrid();
+
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        if (board[r][c]) drawCell(fieldCtx, c * SZ, r * SZ, SZ, COLORS[board[r][c]]);
+      }
+    }
+
+    if (current && !gameOver) {
+      const gy = ghostY();
+      const { mat, x, y, type } = current;
+      for (let r = 0; r < mat.length; r++) {
+        for (let c = 0; c < mat[r].length; c++) {
+          if (!mat[r][c]) continue;
+          if (gy + r >= 0) {
+            fieldCtx.strokeStyle = COLORS[type];
+            fieldCtx.globalAlpha = 0.5;
+            fieldCtx.lineWidth = 2;
+            fieldCtx.strokeRect((x + c) * SZ + 2, (gy + r) * SZ + 2, SZ - 4, SZ - 4);
+            fieldCtx.globalAlpha = 1;
+          }
+        }
+      }
+      for (let r = 0; r < mat.length; r++) {
+        for (let c = 0; c < mat[r].length; c++) {
+          if (mat[r][c] && y + r >= 0) {
+            drawCell(fieldCtx, (x + c) * SZ, (y + r) * SZ, SZ, COLORS[type]);
+          }
+        }
+      }
+    }
+
+    drawPreview(nextCtx, nextType, false);
+    drawPreview(holdCtx, holdType, !canHold);
+
+    if (gameOver) drawOverlay("GAME OVER", "Enterキーでリスタート");
+    else if (paused) drawOverlay("PAUSED", "Pキーで再開");
+  }
+
+  // ---------- loop ----------
+  function loop(t) {
+    const dt = t - lastTime;
+    lastTime = t;
+    if (!paused && !gameOver) {
+      dropAcc += dt;
+      if (dropAcc >= dropInterval()) {
+        dropAcc = 0;
+        if (!collide(current.mat, current.x, current.y + 1)) current.y++;
+        else lockPiece();
+      }
+    }
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  function init() {
+    board = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+    bag = [];
+    holdType = null;
+    canHold = true;
+    score = 0; lines = 0; level = 1;
+    paused = false; gameOver = false;
+    updateStats();
+    nextType = takeFromBag();
+    spawnNext();
+  }
+
+  // ---------- input ----------
+  document.addEventListener("keydown", e => {
+    const key = e.key;
+    if (["ArrowLeft", "ArrowRight", "ArrowDown", "ArrowUp", " "].includes(key)) e.preventDefault();
+
+    if (gameOver) {
+      if (key === "Enter") init();
+      return;
+    }
+    if (key === "p" || key === "P") {
+      paused = !paused;
+      dropAcc = 0;
+      return;
+    }
+    if (paused) return;
+
+    switch (key) {
+      case "ArrowLeft":  move(-1); break;
+      case "ArrowRight": move(1); break;
+      case "ArrowDown":  softDrop(); break;
+      case "ArrowUp":    rotate(); break;
+      case " ":          if (!e.repeat) hardDrop(); break;
+      case "c": case "C": hold(); break;
+    }
+  });
+
+  init();
+  requestAnimationFrame(t => { lastTime = t; loop(t); });
+})();
+</script>
+</body>
+</html>
