@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Minesweeper</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="atmosphere" aria-hidden="true"></div>
+
+  <main class="app">
+    <header class="brand">
+      <p class="brand-mark">MINES</p>
+      <h1 class="brand-title">マインスイーパ</h1>
+      <p class="brand-sub">左クリックで開く / 右クリックで旗</p>
+    </header>
+
+    <section class="hud" aria-label="ゲーム状況">
+      <div class="meter" title="残り地雷">
+        <span class="meter-label">地雷</span>
+        <span class="meter-value" id="mineCount">010</span>
+      </div>
+
+      <button class="face" id="resetBtn" type="button" aria-label="リセット" title="リセット">
+        <span class="face-icon" id="faceIcon">◇</span>
+      </button>
+
+      <div class="meter" title="経過時間">
+        <span class="meter-label">時間</span>
+        <span class="meter-value" id="timer">000</span>
+      </div>
+    </section>
+
+    <section class="difficulty" aria-label="難易度">
+      <button class="diff is-active" type="button" data-diff="easy">初級</button>
+      <button class="diff" type="button" data-diff="medium">中級</button>
+      <button class="diff" type="button" data-diff="hard">上級</button>
+    </section>
+
+    <div class="board-shell">
+      <div class="board" id="board" role="grid" aria-label="盤面"></div>
+      <div class="overlay" id="overlay" hidden>
+        <p class="overlay-title" id="overlayTitle"></p>
+        <button class="overlay-btn" id="overlayBtn" type="button">もう一度</button>
+      </div>
+    </div>
+  </main>
+
+  <script src="game.js"></script>
+</body>
+</html>

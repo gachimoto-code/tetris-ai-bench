@@ -32,6 +32,40 @@
 
 Inkling の生成条件は第1回再挑戦と同じ（Vulkan 全オフロード、ctx 49152、temp 1.0 / top-p 1.0 / min-p 0、max_tokens 32768）。推論 7,621 トークン＋可視回答 2,316 トークン、510.6 秒、19.52 tok/s でした。
 
+## 第3回（マインスイーパ自由演技）
+
+プロンプトは **「マインスイーパ作って」** の一言だけ。仕様も出力形式も指定せず、各モデルの初回出力をそのまま収録し、「言われなくても入れていた機能」を棚卸ししました。全員のコードはブラウザでの実動確認済み（ゲーム画面のキャプチャで確認、エラーなし）。
+
+| モデル | サイズ | ファイル | 特徴 |
+|---|---|---|---|
+| Gemini Hydrogen | 62,440 B | [minesweeper/gemini-free.html](minesweeper/gemini-free.html) | 最大作。カスタムサイズ、Tone.js の効果音、自己ベスト保存、ダーク/ライトテーマ切替まで全部入り。外部依存は Tailwind CDN＋Google Fonts＋Tone.js CDN |
+| Cursor Auto | 18,962 B（3ファイル） | [minesweeper/cursor-free/index.html](minesweeper/cursor-free/index.html) | 単一HTMLではなく3ファイルに分割。デザイン重視、顔は ◇／★／× の記号。コードなし |
+| Claude Opus 5.5 | 16,784 B | [minesweeper/opus-free.html](minesweeper/opus-free.html) | カスタムサイズ、自己ベスト保存、キーボード操作（矢印・F・R）、aria ラベル、長押しは振動つき。初手の前は旗を置けない |
+| Muse | 10,431 B | [minesweeper/muse-free.html](minesweeper/muse-free.html) | 定番を全部押さえた堅実型。コード、長押し旗、旗モード、誤旗の ❌ 表示まで一通り |
+| ChatGPT | 10,370 B | [minesweeper/chatgpt-free.html](minesweeper/chatgpt-free.html) | コードなし、勝利時の自動旗立てもなし。上級は 24×16/99。進捗％表示が独自要素。旗は地雷数を超えて置けない |
+| Inkling 2 Mini | 6,552 B | [minesweeper/inkling-free.html](minesweeper/inkling-free.html) | 最小構成ながら初回安全・連鎖開放・旗・自動旗立て・誤旗表示は自発的に実装。難易度選択・タイマー・コードなし（9×9/10 固定）。生回答（説明文つき）は [minesweeper/inkling-free-raw.txt](minesweeper/inkling-free-raw.txt) |
+
+### 機能棚卸し（マインスイーパ）
+
+| 機能 | Muse | Inkling | Opus | ChatGPT | Cursor | Gemini |
+|---|---|---|---|---|---|---|
+| 初回安全（周囲8マス含む） | ● | ● | ● | ● | ● | ● |
+| 連鎖開放 | ● | ● | ● | ● | ● | ● |
+| 旗＋残数カウンタ | ● | ● | ● | ● | ● | ● |
+| タイマー | ● | — | ● | ● | ● | ● |
+| コード（一括開き） | ● | — | ● | — | — | ● |
+| 難易度3段階 | ● | — | ● | ● | ● | ● |
+| カスタムサイズ | — | — | ● | — | — | ● |
+| タッチ長押し旗 | ● | — | ● | — | ● | ● |
+| 旗モード切替 | ● | — | ● | ● | — | ● |
+| 自己ベスト保存 | — | — | ● | — | — | ● |
+| 効果音 | — | — | — | — | — | ● |
+| テーマ切替 | — | — | — | — | — | ● |
+| 勝利時の自動旗立て | ● | ● | ● | — | ● | ● |
+| 間違った旗の表示 | ● | ● | ● | ● | — | ● |
+
+Inkling の生成条件はテトリス第2回と同じ（Vulkan 全オフロード、ctx 49152、temp 1.0 / top-p 1.0 / min-p 0、max_tokens 32768）。推論 1,363 トークン＋可視回答 2,898 トークン、215.1 秒、19.98 tok/s でした。
+
 ## 統一プロンプト（全文）
 
 全モデルにこの文面をそのまま1回だけ渡し、手直しなしの初回出力を採点しました（Inkling の再挑戦のみ出力上限を変更）。

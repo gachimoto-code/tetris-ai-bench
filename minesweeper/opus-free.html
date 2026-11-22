@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>マインスイーパ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@500;700;800&family=M+PLUS+Rounded+1c:wght@500;800&display=swap">
+<style>
+/* VOICE: 遊び心のある、手触りのいいボードゲーム
+   IDEA: 草原の地雷原。芝を刈ると土が見え、数字が掘り出される
+   PICTURE: 盤面そのもの。芝タイルは立体、掘った土はフラット
+   COLOUR/TYPE: 芝の緑・土のベージュ・旗の赤 / Rubik + M PLUS Rounded
+   LAYOUT: 小さなタイトル → ステータス帯 → 盤面 → 難易度。狭幅は盤面を横スクロール */
+:root{color-scheme:light dark;
+--bg:light-dark(#e9efd9,#141a10);--ink:light-dark(#1f2a14,#eef3e2);--muted:light-dark(#5b6b4a,#a3b38f);
+--panel:light-dark(#fbfdf4,#1e2617);--line:light-dark(#c9d6b0,#34422a);
+--g1:light-dark(#8ccf4d,#4f8a2a);--g2:light-dark(#7cc042,#457d24);--gedge:light-dark(#b6e57f,#74b049);--gshadow:light-dark(#5a9a2a,#2c5416);
+--d1:light-dark(#ecd9b4,#3d3424);--d2:light-dark(#e3cea4,#362e20);
+--flag:#e5383b;--accent:light-dark(#e5383b,#ff6b6e)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 "M PLUS Rounded 1c",system-ui,sans-serif;overflow-x:clip;min-height:100vh}
+.wrap{max-width:1240px;margin:0 auto;padding:clamp(18px,3vw,40px) max(4vw,12px) 40px;display:flex;flex-direction:column;align-items:center;gap:16px}
+h1{font:800 clamp(28px,5vw,40px)/1.05 "M PLUS Rounded 1c",sans-serif;margin:0;text-wrap:balance}
+.case{background:var(--panel);border:1px solid var(--line);border-radius:22px;padding:14px;box-shadow:0 10px 30px light-dark(#4a6b2a22,#0006);max-width:100%;display:flex;flex-direction:column;gap:12px}
+.bar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.stat{display:flex;align-items:center;gap:8px;font:700 22px/1 Rubik,sans-serif;font-variant-numeric:tabular-nums;background:var(--bg);border-radius:12px;padding:10px 14px;min-width:96px;white-space:nowrap}
+.stat svg{width:20px;height:20px;flex:none}
+.face{width:52px;height:52px;border-radius:50%;border:0;background:var(--g1);box-shadow:inset 0 3px 0 var(--gedge),inset 0 -4px 0 var(--gshadow);cursor:pointer;display:grid;place-items:center;transition:transform .1s}
+.face:active{transform:scale(.94)}
+.face svg{width:34px;height:34px}
+button:focus-visible,.cell:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.scroll{overflow:auto;max-width:100%;border-radius:12px;-webkit-overflow-scrolling:touch}
+.board{display:grid;gap:2px;background:var(--gshadow);padding:2px;border-radius:12px;width:max-content;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+.cell{width:var(--cs);height:var(--cs);border:0;padding:0;border-radius:5px;font:800 calc(var(--cs)*.56)/1 Rubik,sans-serif;display:grid;place-items:center;cursor:pointer;background:var(--g1);box-shadow:inset 0 2px 0 var(--gedge),inset 0 -3px 0 var(--gshadow);color:transparent;-webkit-tap-highlight-color:transparent}
+.cell.alt{background:var(--g2)}
+.cell:not(.open):hover{filter:brightness(1.08)}
+.cell.open{background:var(--d1);box-shadow:none;cursor:default}
+.cell.open.alt{background:var(--d2)}
+.cell.open.pop{animation:pop .22s ease-out}
+@keyframes pop{from{transform:scale(.6)}to{transform:scale(1)}}
+.cell svg{width:68%;height:68%}
+.cell.boom{background:var(--flag)!important}
+.n1{color:#1f6fd1!important}.n2{color:#2e8b2e!important}.n3{color:#d6332f!important}.n4{color:#6a2bb3!important}
+.n5{color:#a14a12!important}.n6{color:#0f8a8a!important}.n7{color:#222!important}.n8{color:#777!important}
+:root[data-theme=dark] .n1,.dk .n1{color:#6fb0ff!important}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]) .n1{color:#6fb0ff!important}:root:not([data-theme=light]) .n2{color:#6fd36f!important}:root:not([data-theme=light]) .n3{color:#ff7a75!important}:root:not([data-theme=light]) .n4{color:#c39bff!important}:root:not([data-theme=light]) .n7{color:#ddd!important}}
+:root[data-theme=dark] .n2{color:#6fd36f!important}:root[data-theme=dark] .n3{color:#ff7a75!important}:root[data-theme=dark] .n4{color:#c39bff!important}:root[data-theme=dark] .n7{color:#ddd!important}
+.controls{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+.seg{display:flex;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:4px;gap:4px;flex-wrap:wrap}
+.seg button,.btn{font:700 15px/1 "M PLUS Rounded 1c",sans-serif;min-height:44px;padding:0 16px;border-radius:10px;border:0;background:transparent;color:var(--ink);cursor:pointer}
+.seg button[aria-pressed=true]{background:var(--g1);color:#13210a;box-shadow:inset 0 -3px 0 var(--gshadow)}
+.btn{background:var(--panel);border:1px solid var(--line);display:flex;align-items:center;gap:8px}
+.btn[aria-pressed=true]{background:var(--flag);color:#fff;border-color:var(--flag)}
+.btn svg{width:18px;height:18px}
+.custom{display:none;gap:10px;flex-wrap:wrap;justify-content:center;align-items:end}
+.custom.on{display:flex}
+.custom label{display:flex;flex-direction:column;font-size:13px;color:var(--muted);gap:4px}
+.custom input{font:16px Rubik,sans-serif;width:84px;min-height:44px;padding:0 10px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--ink)}
+.msg{font:800 18px/1.3 "M PLUS Rounded 1c",sans-serif;min-height:24px;text-align:center}
+.msg.win{color:light-dark(#2e7d1c,#8fe06a)}.msg.lose{color:var(--accent)}
+.help{font-size:14px;color:var(--muted);text-align:center;max-width:60ch;margin:0}
+.best{font-size:14px;color:var(--muted);display:flex;gap:16px;flex-wrap:wrap;justify-content:center}
+.best b{color:var(--ink);font-family:Rubik,sans-serif;font-variant-numeric:tabular-nums}
+@media(prefers-reduced-motion:reduce){.cell.open.pop{animation:none}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+<defs>
+<symbol id="flag" viewBox="0 0 24 24"><rect x="6" y="3" width="2.2" height="18" rx="1" fill="#5a3b1e"/><path d="M8 3.5 19 8l-11 4.5z" fill="#e5383b"/><path d="M8 3.5 19 8l-11 1.2z" fill="#ff7376"/><ellipse cx="7" cy="21" rx="5" ry="1.6" fill="#0003"/></symbol>
+<symbol id="mine" viewBox="0 0 24 24"><g stroke="#1b1b1b" stroke-width="2.2" stroke-linecap="round"><path d="M12 2.5v19M2.5 12h19M5.3 5.3l13.4 13.4M18.7 5.3 5.3 18.7"/></g><circle cx="12" cy="12" r="6.5" fill="#1b1b1b"/><circle cx="9.7" cy="9.7" r="2" fill="#fff9"/></symbol>
+<symbol id="cross" viewBox="0 0 24 24"><path d="M5 5l14 14M19 5 5 19" stroke="#e5383b" stroke-width="3" stroke-linecap="round"/></symbol>
+<symbol id="clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M12 7v5l3 2" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></symbol>
+</defs>
+</svg>
+<div class="wrap">
+  <h1>マインスイーパ</h1>
+  <div class="case">
+    <div class="bar">
+      <div class="stat" title="残り地雷"><svg><use href="#flag"/></svg><span id="left">010</span></div>
+      <button class="face" id="face" aria-label="リスタート"><svg viewBox="0 0 40 40" id="faceSvg"></svg></button>
+      <div class="stat" title="経過時間"><svg style="color:var(--muted)"><use href="#clock"/></svg><span id="time">000</span></div>
+    </div>
+    <div class="scroll"><div class="board" id="board" role="grid" aria-label="盤面"></div></div>
+    <div class="msg" id="msg" aria-live="polite"></div>
+  </div>
+  <div class="controls">
+    <div class="seg" id="levels">
+      <button data-l="easy">初級</button><button data-l="mid">中級</button><button data-l="hard">上級</button><button data-l="custom">カスタム</button>
+    </div>
+    <button class="btn" id="flagMode" aria-pressed="false"><svg><use href="#flag"/></svg>旗モード</button>
+  </div>
+  <form class="custom" id="customForm">
+    <label>幅<input id="cw" type="number" min="5" max="40" value="20"></label>
+    <label>高さ<input id="ch" type="number" min="5" max="30" value="12"></label>
+    <label>地雷<input id="cm" type="number" min="1" max="999" value="40"></label>
+    <button class="btn" type="submit">開始</button>
+  </form>
+  <div class="best" id="best"></div>
+  <p class="help">クリックで開く／右クリック・長押し・旗モードで旗／開いた数字をクリックすると周囲の旗が数字と一致していれば一括オープン。最初の一手は必ず安全。</p>
+</div>
+<script>
+{
+const LV={easy:{w:9,h:9,m:10},mid:{w:16,h:16,m:40},hard:{w:30,h:16,m:99}};
+const $=id=>document.getElementById(id);
+const boardEl=$('board'),leftEl=$('left'),timeEl=$('time'),msgEl=$('msg'),faceSvg=$('faceSvg');
+const store={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+let level=store.get('ms.level','easy'),cfg,W,H,M,cells,state,flags,opened,timer,t0,elapsed,flagMode=false;
+const custom=store.get('ms.custom',{w:20,h:12,m:40});
+$('cw').value=custom.w;$('ch').value=custom.h;$('cm').value=custom.m;
+
+const FACES={
+ play:'<circle cx="20" cy="20" r="15" fill="#ffd23f"/><circle cx="14.5" cy="17" r="2" fill="#222"/><circle cx="25.5" cy="17" r="2" fill="#222"/><path d="M13 23q7 6 14 0" stroke="#222" stroke-width="2.4" fill="none" stroke-linecap="round"/>',
+ press:'<circle cx="20" cy="20" r="15" fill="#ffd23f"/><circle cx="14.5" cy="17" r="2.2" fill="#222"/><circle cx="25.5" cy="17" r="2.2" fill="#222"/><circle cx="20" cy="26" r="3.2" fill="#222"/>',
+ win:'<circle cx="20" cy="20" r="15" fill="#ffd23f"/><path d="M9 15h22l-2 5h-6l-2-3h-2l-2 3h-6z" fill="#222"/><path d="M13 24q7 6 14 0" stroke="#222" stroke-width="2.4" fill="none" stroke-linecap="round"/>',
+ lose:'<circle cx="20" cy="20" r="15" fill="#ffd23f"/><path d="M12 14l5 5M17 14l-5 5M23 14l5 5M28 14l-5 5" stroke="#222" stroke-width="2.2" stroke-linecap="round"/><path d="M13 28q7-6 14 0" stroke="#222" stroke-width="2.4" fill="none" stroke-linecap="round"/>'
+};
+const face=f=>faceSvg.innerHTML=FACES[f];
+const pad=n=>String(Math.max(-99,Math.min(999,n))).padStart(3,'0');
+
+function cellSize(){
+  const avail=Math.min(window.innerWidth-60,1180);
+  const fit=Math.floor((avail-W*2)/W);
+  return Math.max(28,Math.min(40,fit));
+}
+function init(){
+  cfg=level==='custom'?custom:LV[level];
+  W=cfg.w;H=cfg.h;M=Math.min(cfg.m,W*H-9);
+  cells=Array.from({length:W*H},()=>({mine:false,n:0,open:false,flag:false}));
+  state='ready';flags=0;opened=0;elapsed=0;clearInterval(timer);
+  boardEl.style.setProperty('--cs',cellSize()+'px');
+  boardEl.style.gridTemplateColumns=`repeat(${W},var(--cs))`;
+  boardEl.innerHTML=cells.map((c,i)=>{const x=i%W,y=(i/W)|0;return `<button class="cell${(x+y)%2?' alt':''}" data-i="${i}" aria-label="${y+1}行${x+1}列 未開封"></button>`}).join('');
+  for(const b of document.querySelectorAll('#levels button'))b.setAttribute('aria-pressed',b.dataset.l===level);
+  $('customForm').classList.toggle('on',level==='custom');
+  leftEl.textContent=pad(M);timeEl.textContent='000';msgEl.textContent='';msgEl.className='msg';
+  face('play');renderBest();
+}
+const nb=i=>{const x=i%W,y=(i/W)|0,r=[];for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){if(!dx&&!dy)continue;const nx=x+dx,ny=y+dy;if(nx>=0&&ny>=0&&nx<W&&ny<H)r.push(ny*W+nx)}return r};
+function plant(safe){
+  const ban=new Set([safe,...nb(safe)]);
+  const pool=[];for(let i=0;i<W*H;i++)if(!ban.has(i))pool.push(i);
+  for(let k=0;k<M;k++){const j=k+Math.floor(Math.random()*(pool.length-k));[pool[k],pool[j]]=[pool[j],pool[k]];cells[pool[k]].mine=true}
+  cells.forEach((c,i)=>c.n=nb(i).filter(j=>cells[j].mine).length);
+  state='play';t0=Date.now();
+  timer=setInterval(()=>{elapsed=Math.floor((Date.now()-t0)/1000);timeEl.textContent=pad(elapsed)},250);
+}
+const el=i=>boardEl.children[i];
+function draw(i,pop){
+  const c=cells[i],b=el(i),x=i%W,y=(i/W)|0;
+  if(c.open){
+    b.classList.add('open');if(pop)b.classList.add('pop');
+    b.className=b.className.replace(/\bn\d\b/g,'');
+    if(c.mine)b.innerHTML='<svg><use href="#mine"/></svg>';
+    else if(c.n){b.textContent=c.n;b.classList.add('n'+c.n)}else b.textContent='';
+    b.setAttribute('aria-label',`${y+1}行${x+1}列 ${c.mine?'地雷':c.n||'空'}`);
+  }else{
+    b.innerHTML=c.flag?'<svg><use href="#flag"/></svg>':'';
+    b.setAttribute('aria-label',`${y+1}行${x+1}列 ${c.flag?'旗':'未開封'}`);
+  }
+}
+function open(i){
+  const st=[i];
+  while(st.length){
+    const k=st.pop(),c=cells[k];
+    if(c.open||c.flag)continue;
+    c.open=true;opened++;draw(k,true);
+    if(c.mine){lose(k);return}
+    if(c.n===0)for(const j of nb(k))if(!cells[j].open)st.push(j);
+  }
+  if(opened===W*H-M)win();
+}
+function chord(i){
+  const c=cells[i];if(!c.open||!c.n)return;
+  const ns=nb(i);
+  if(ns.filter(j=>cells[j].flag).length!==c.n)return;
+  for(const j of ns)if(!cells[j].open&&!cells[j].flag){open(j);if(state!=='play')return}
+}
+function toggleFlag(i){
+  const c=cells[i];if(c.open||state==='over')return;
+  c.flag=!c.flag;flags+=c.flag?1:-1;leftEl.textContent=pad(M-flags);draw(i);
+}
+function act(i,asFlag){
+  if(state==='over')return;
+  const c=cells[i];
+  if(asFlag){if(state==='ready')return;toggleFlag(i);return}
+  if(c.open){chord(i);return}
+  if(c.flag)return;
+  if(state==='ready')plant(i);
+  open(i);
+}
+function lose(k){
+  state='over';clearInterval(timer);face('lose');
+  cells.forEach((c,i)=>{
+    if(c.mine&&!c.flag){c.open=true;draw(i)}
+    else if(!c.mine&&c.flag){el(i).innerHTML='<svg><use href="#cross"/></svg>'}
+  });
+  el(k).classList.add('boom');
+  msgEl.textContent='ドカン！ 顔をクリックでもう一度';msgEl.className='msg lose';
+}
+function win(){
+  state='over';clearInterval(timer);face('win');
+  elapsed=Math.floor((Date.now()-t0)/1000);timeEl.textContent=pad(elapsed);
+  cells.forEach((c,i)=>{if(c.mine&&!c.flag){c.flag=true;draw(i)}});
+  flags=M;leftEl.textContent='000';
+  let txt=`クリア！ ${elapsed}秒`;
+  if(level!=='custom'){const b=store.get('ms.best',{});if(!b[level]||elapsed<b[level]){b[level]=elapsed;store.set('ms.best',b);txt+=' ・ 自己ベスト更新'}}
+  msgEl.textContent=txt;msgEl.className='msg win';renderBest();
+}
+function renderBest(){
+  const b=store.get('ms.best',{});
+  $('best').innerHTML=[['easy','初級'],['mid','中級'],['hard','上級']].map(([k,n])=>`<span>${n}ベスト <b>${b[k]!=null?b[k]+'秒':'—'}</b></span>`).join('');
+}
+
+/* 入力 */
+let lp=null,lpFired=false;
+const idx=e=>{const b=e.target.closest('.cell');return b?+b.dataset.i:-1};
+boardEl.addEventListener('contextmenu',e=>{e.preventDefault();const i=idx(e);if(i>=0&&e.pointerType!=='touch'&&!lpFired)act(i,true)});
+boardEl.addEventListener('pointerdown',e=>{
+  const i=idx(e);if(i<0||state==='over')return;
+  lpFired=false;
+  if(e.button===0)face('press');
+  if(e.pointerType==='touch'){clearTimeout(lp);lp=setTimeout(()=>{lpFired=true;act(i,!flagMode);if(navigator.vibrate)try{navigator.vibrate(20)}catch(_){}},380)}
+});
+const endPress=()=>{clearTimeout(lp);if(state!=='over')face('play')};
+boardEl.addEventListener('pointerup',endPress);boardEl.addEventListener('pointerleave',endPress);boardEl.addEventListener('pointercancel',endPress);
+boardEl.addEventListener('click',e=>{
+  const i=idx(e);if(i<0)return;
+  if(lpFired){lpFired=false;return}
+  act(i,flagMode&&!cells[i].open);
+});
+boardEl.addEventListener('keydown',e=>{
+  const i=idx(e);if(i<0)return;
+  const mv={ArrowLeft:-1,ArrowRight:1,ArrowUp:-W,ArrowDown:W}[e.key];
+  if(mv!=null){e.preventDefault();const j=i+mv;if(j>=0&&j<W*H&&!(mv===-1&&i%W===0)&&!(mv===1&&i%W===W-1))el(j).focus()}
+  else if(e.key==='f'||e.key==='F'){e.preventDefault();act(i,true)}
+});
+$('face').addEventListener('click',init);
+$('levels').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;level=b.dataset.l;store.set('ms.level',level);init()});
+$('flagMode').addEventListener('click',e=>{flagMode=!flagMode;e.currentTarget.setAttribute('aria-pressed',flagMode)});
+$('customForm').addEventListener('submit',e=>{
+  e.preventDefault();
+  const w=Math.max(5,Math.min(40,+$('cw').value||9)),h=Math.max(5,Math.min(30,+$('ch').value||9)),m=Math.max(1,Math.min(w*h-9,+$('cm').value||10));
+  Object.assign(custom,{w,h,m});$('cw').value=w;$('ch').value=h;$('cm').value=m;store.set('ms.custom',custom);init();
+});
+document.addEventListener('keydown',e=>{if(e.key==='r'&&!e.target.closest('input')){init()}});
+let rz;addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(()=>boardEl.style.setProperty('--cs',cellSize()+'px'),120)});
+init();
+}
+</script>
+</body>
+</html>

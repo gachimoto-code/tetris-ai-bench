@@ -1,0 +1,283 @@
+もちろんです。そのまま保存してブラウザで開けば遊べる、単一ファイルのマインスイーパです。
+
+`minesweeper.html` として保存して、ブラウザで開いてください。
+
+- 左クリック：開く
+- 右クリック：旗
+- `R`：リセット
+
+```html
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Minesweeper</title>
+<style>
+  :root { color-scheme: dark; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-family: system-ui, sans-serif;
+    background: #111827;
+    color: #e5e7eb;
+    gap: 12px;
+  }
+  h1 { font-size: 24px; margin: 0; }
+  .hud { display: flex; gap: 16px; align-items: center; }
+  .badge {
+    background: #1f2937;
+    border: 1px solid #374151;
+    padding: 8px 12px;
+    border-radius: 999px;
+    min-width: 72px;
+    text-align: center;
+  }
+  button {
+    border: 0;
+    border-radius: 10px;
+    padding: 10px 16px;
+    cursor: pointer;
+    background: #2563eb;
+    color: white;
+    font-weight: 700;
+  }
+  button:hover { background: #1d4ed8; }
+  #grid {
+    display: grid;
+    grid-template-columns: repeat(9, 38px);
+    grid-template-rows: repeat(9, 38px);
+    gap: 3px;
+    padding: 10px;
+    background: #0b1220;
+    border-radius: 12px;
+    border: 1px solid #1f2937;
+  }
+  .cell {
+    background: #374151;
+    border: 1px solid #4b5563;
+    border-radius: 8px;
+    color: white;
+    font-weight: 800;
+    padding: 0;
+  }
+  .cell:hover:not(.revealed):not(.flagged) { border-color: #60a5fa; }
+  .cell.revealed { background: #9ca3af; color: #111827; border-color: #6b7280; }
+  .cell.mine { background: #dc2626; color: white; }
+  .cell.flagged { background: #f59e0b; color: #111827; }
+  .cell.wrong { background: #7f1d1d; color: white; }
+  .n1 { color: #1d4ed8; } .n2 { color: #15803d; } .n3 { color: #dc2626; }
+  .n4 { color: #7c3aed; } .n5 { color: #92400e; } .n6 { color: #0891b2; }
+  .n7 { color: #111827; } .n8 { color: #4b5563; }
+  .msg { min-height: 24px; font-weight: 700; }
+</style>
+</head>
+<body>
+  <h1>💣 Minesweeper</h1>
+  <div class="hud">
+    <div class="badge">💣 <span id="minesLeft">10</span></div>
+    <div class="badge" id="status">準備中</div>
+    <button id="reset">リセット</button>
+  </div>
+  <div id="grid"></div>
+  <div class="msg" id="msg">クリックでスタート！</div>
+
+<script>
+const ROWS = 9, COLS = 9, MINES = 10;
+const grid = document.getElementById('grid');
+const minesLeftEl = document.getElementById('minesLeft');
+const statusEl = document.getElementById('status');
+const msgEl = document.getElementById('msg');
+const resetBtn = document.getElementById('reset');
+
+let cells = [];
+let gameOver = false;
+let firstClick = true;
+
+function idx(r,c){ return r*COLS+c; }
+function inBounds(r,c){ return r>=0 && c>=0 && r<ROWS && c<COLS; }
+
+function shuffle(a){
+  for (let i=a.length-1;i>0;i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [a[i],a[j]]=[a[j],a[i]];
+  }
+  return a;
+}
+
+function reset(){
+  cells = [];
+  for (let r=0;r<ROWS;r++){
+    for (let c=0;c<COLS;c++){
+      cells.push({ r,c, mine:false, revealed:false, flagged:false, adjacent:0 });
+    }
+  }
+  gameOver = false;
+  firstClick = true;
+  msgEl.textContent = 'クリックでスタート！';
+  statusEl.textContent = '準備中';
+  buildGrid();
+  render();
+}
+
+function buildGrid(){
+  grid.innerHTML = '';
+  cells.forEach((cell,i) => {
+    const btn = document.createElement('button');
+    btn.className = 'cell';
+    btn.dataset.i = i;
+
+    btn.addEventListener('click', () => handleLeft(i));
+    btn.addEventListener('contextmenu', e => {
+      e.preventDefault();
+      handleFlag(i);
+    });
+
+    grid.appendChild(btn);
+  });
+}
+
+function placeMines(firstIndex){
+  const f = cells[firstIndex];
+  const safe = new Set();
+  for (let r=f.r-1;r<=f.r+1;r++){
+    for (let c=f.c-1;c<=f.c+1;c++){
+      if (inBounds(r,c)) safe.add(idx(r,c));
+    }
+  }
+
+  const candidates = cells
+    .map((_,i)=>i)
+    .filter(i => !safe.has(i));
+
+  const mineIndexes = shuffle(candidates).slice(0, MINES);
+  mineIndexes.forEach(i => cells[i].mine = true);
+
+  cells.forEach(cell => {
+    if (cell.mine) return;
+    let count = 0;
+    for (let r=cell.r-1;r<=cell.r+1;r++){
+      for (let c=cell.c-1;c<=cell.c+1;c++){
+        if (inBounds(r,c) && cells[idx(r,c)].mine) count++;
+      }
+    }
+    cell.adjacent = count;
+  });
+
+  firstClick = false;
+}
+
+function handleLeft(i){
+  if (gameOver) return;
+  const cell = cells[i];
+  if (cell.flagged || cell.revealed) return;
+
+  if (firstClick) placeMines(i);
+
+  if (cell.mine) return lose(i);
+
+  reveal(i);
+  render();
+  checkWin();
+}
+
+function handleFlag(i){
+  if (gameOver) return;
+  const cell = cells[i];
+  if (cell.revealed) return;
+  cell.flagged = !cell.flagged;
+  render();
+}
+
+function reveal(i){
+  const cell = cells[i];
+  if (cell.revealed || cell.flagged || cell.mine) return;
+
+  cell.revealed = true;
+
+  if (cell.adjacent === 0){
+    for (let r=cell.r-1;r<=cell.r+1;r++){
+      for (let c=cell.c-1;c<=cell.c+1;c++){
+        if (inBounds(r,c)) reveal(idx(r,c));
+      }
+    }
+  }
+}
+
+function checkWin(){
+  const totalSafe = cells.filter(c => !c.mine).length;
+  const revealedSafe = cells.filter(c => !c.mine && c.revealed).length;
+  if (revealedSafe === totalSafe) win();
+}
+
+function win(){
+  gameOver = true;
+  cells.forEach(c => {
+    if (!c.mine) c.revealed = true;
+    if (c.mine) c.flagged = true;
+  });
+  statusEl.textContent = 'クリア！';
+  msgEl.textContent = 'おめでとう！🎉';
+  render();
+}
+
+function lose(index){
+  gameOver = true;
+  cells.forEach(c => {
+    if (c.mine) c.revealed = true;
+  });
+  statusEl.textContent = 'ゲームオーバー';
+  msgEl.textContent = '爆発しました…';
+  render();
+}
+
+function render(){
+  let flags = 0;
+
+  cells.forEach((cell,i) => {
+    const btn = grid.children[i];
+    btn.className = 'cell';
+    btn.textContent = '';
+
+    if (cell.flagged) flags++;
+
+    if (cell.revealed && cell.mine){
+      btn.classList.add('revealed','mine');
+      btn.textContent = '💣';
+    } else if (cell.revealed){
+      btn.classList.add('revealed');
+      if (cell.adjacent > 0){
+        btn.classList.add('n' + cell.adjacent);
+        btn.textContent = cell.adjacent;
+      }
+    } else if (cell.flagged){
+      btn.classList.add('flagged');
+      btn.textContent = '🚩';
+    }
+
+    if (gameOver && cell.flagged && !cell.mine){
+      btn.classList.remove('flagged');
+      btn.classList.add('wrong');
+      btn.textContent = '❌';
+    }
+  });
+
+  minesLeftEl.textContent = Math.max(0, MINES - flags);
+}
+
+resetBtn.addEventListener('click', reset);
+document.addEventListener('keydown', e => {
+  if (e.key.toLowerCase() === 'r') reset();
+});
+
+reset();
+</script>
+</body>
+</html>
+```
+
+必要なら、もう少し本格的に **スマホ対応トグル旗**、**レベル選択**、**タイマー/スコア**、**ピン付きカ chord 操作**（数字クリックで周囲開封）も追加できます。

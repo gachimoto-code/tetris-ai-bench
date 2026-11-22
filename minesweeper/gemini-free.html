@@ -1,0 +1,1228 @@
+<!DOCTYPE html>
+<html lang="ja" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>マインスイーパー | Modern Minesweeper</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter & Noto Sans JP & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- Tone.js for subtle synthesized sound effects -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Inter"', '"Noto Sans JP"', 'sans-serif'],
+                        mono: ['"JetBrains Mono"', 'monospace'],
+                    },
+                    colors: {
+                        slate: {
+                            850: '#172033',
+                            950: '#0b1120',
+                        }
+                    },
+                    animation: {
+                        'pop': 'pop 0.18s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards',
+                        'shake': 'shake 0.4s cubic-bezier(.36,.07,.19,.97) both',
+                        'pulse-subtle': 'pulseSubtle 2s infinite',
+                    },
+                    keyframes: {
+                        pop: {
+                            '0%': { transform: 'scale(0.8)', opacity: '0.5' },
+                            '100%': { transform: 'scale(1)', opacity: '1' },
+                        },
+                        shake: {
+                            '10%, 90%': { transform: 'translate3d(-2px, 0, 0)' },
+                            '20%, 80%': { transform: 'translate3d(3px, 0, 0)' },
+                            '30%, 50%, 70%': { transform: 'translate3d(-4px, 0, 0)' },
+                            '40%, 60%': { transform: 'translate3d(4px, 0, 0)' }
+                        },
+                        pulseSubtle: {
+                            '0%, 100%': { opacity: '1' },
+                            '50%': { opacity: '0.7' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* カスタムスタイルとセルの立体感・アニメーション */
+        body {
+            font-family: 'Inter', 'Noto Sans JP', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* ボードスクロールバーのカスタマイズ */
+        .board-container::-webkit-scrollbar {
+            height: 8px;
+            width: 8px;
+        }
+        .board-container::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .board-container::-webkit-scrollbar-thumb {
+            background-color: rgba(156, 163, 175, 0.4);
+            border-radius: 9999px;
+        }
+        .board-container::-webkit-scrollbar-thumb:hover {
+            background-color: rgba(156, 163, 175, 0.6);
+        }
+
+        /* セルの基本スタイル */
+        .cell {
+            aspect-ratio: 1 / 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 700;
+            border-radius: 6px;
+            transition: background-color 0.12s ease, transform 0.08s ease, box-shadow 0.12s ease;
+            cursor: pointer;
+            position: relative;
+        }
+
+        /* 未開封セル（ライトモード） */
+        .cell-hidden {
+            background: linear-gradient(145deg, #f8fafc, #e2e8f0);
+            box-shadow: 0 2px 0 #cbd5e1, inset 0 1px 0 rgba(255, 255, 255, 0.8);
+            border: 1px solid #cbd5e1;
+        }
+        .cell-hidden:hover {
+            background: linear-gradient(145deg, #ffffff, #f1f5f9);
+            transform: translateY(-1px);
+        }
+        .cell-hidden:active, .cell-pressed {
+            transform: translateY(1px) scale(0.96);
+            box-shadow: none;
+            background: #cbd5e1;
+        }
+
+        /* 未開封セル（ダークモード） */
+        .dark .cell-hidden {
+            background: linear-gradient(145deg, #334155, #1e293b);
+            box-shadow: 0 2px 0 #0f172a, inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            border: 1px solid #334155;
+        }
+        .dark .cell-hidden:hover {
+            background: linear-gradient(145deg, #3e4e66, #263349);
+            transform: translateY(-1px);
+        }
+        .dark .cell-hidden:active, .dark .cell-pressed {
+            transform: translateY(1px) scale(0.96);
+            box-shadow: none;
+            background: #1e293b;
+        }
+
+        /* 開封済みセル */
+        .cell-revealed {
+            background-color: #f1f5f9;
+            border: 1px solid #e2e8f0;
+            cursor: default;
+        }
+        .dark .cell-revealed {
+            background-color: #0f172a;
+            border: 1px solid #1e293b;
+        }
+
+        /* 数字がある開封済みセルはコード（周囲一括オープン）のためポインター表示 */
+        .cell-revealed.has-number {
+            cursor: pointer;
+        }
+        .cell-revealed.has-number:hover {
+            background-color: #e2e8f0;
+        }
+        .dark .cell-revealed.has-number:hover {
+            background-color: #172033;
+        }
+
+        /* 数字ごとの視認性の高いカラーリング */
+        .num-1 { color: #2563eb; } /* Blue */
+        .dark .num-1 { color: #60a5fa; }
+
+        .num-2 { color: #16a34a; } /* Green */
+        .dark .num-2 { color: #4ade80; }
+
+        .num-3 { color: #dc2626; } /* Red */
+        .dark .num-3 { color: #f87171; }
+
+        .num-4 { color: #7c3aed; } /* Purple */
+        .dark .num-4 { color: #a78bfa; }
+
+        .num-5 { color: #b45309; } /* Amber/Maroon */
+        .dark .num-5 { color: #fbbf24; }
+
+        .num-6 { color: #0891b2; } /* Cyan */
+        .dark .num-6 { color: #22d3ee; }
+
+        .num-7 { color: #1e293b; } /* Dark Slate */
+        .dark .num-7 { color: #e2e8f0; }
+
+        .num-8 { color: #64748b; } /* Gray */
+        .dark .num-8 { color: #94a3b8; }
+
+        /* 爆発した地雷 */
+        .cell-mine-exploded {
+            background-color: #ef4444 !important;
+            border-color: #dc2626 !important;
+            color: white !important;
+        }
+
+        /* 通常表示された地雷 */
+        .cell-mine-revealed {
+            background-color: #fee2e2;
+            border-color: #fecaca;
+        }
+        .dark .cell-mine-revealed {
+            background-color: #450a0a;
+            border-color: #7f1d1d;
+        }
+
+        /* 誤ったフラグ */
+        .cell-flag-wrong {
+            background-color: #fef3c7;
+            border-color: #fde68a;
+        }
+        .dark .cell-flag-wrong {
+            background-color: #451a03;
+            border-color: #78350f;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 dark:bg-slate-950 text-slate-800 dark:text-slate-100 min-h-screen flex flex-col transition-colors duration-200">
+
+    <!-- ヘッダー -->
+    <header class="w-full max-w-5xl mx-auto px-4 pt-5 pb-3 flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-2.5">
+            <div class="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-500/20">
+                <!-- 地雷アイコン SVG -->
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="6"/>
+                    <path d="M12 2v4"/><path d="M12 18v4"/>
+                    <path d="M4.93 4.93l2.83 2.83"/><path d="M16.24 16.24l2.83 2.83"/>
+                    <path d="M2 12h4"/><path d="M18 12h4"/>
+                    <path d="M4.93 19.07l2.83-2.83"/><path d="M16.24 7.76l2.83-2.83"/>
+                </svg>
+            </div>
+            <div>
+                <h1 class="text-lg sm:text-xl font-bold tracking-tight leading-tight">マインスイーパー</h1>
+                <p class="text-xs text-slate-500 dark:text-slate-400">初手安全保証・コード機能搭載</p>
+            </div>
+        </div>
+
+        <!-- 右側コントロール（サウンド・ヘルプ・テーマ切替） -->
+        <div class="flex items-center gap-2">
+            <!-- サウンド切替ボタン -->
+            <button id="btn-sound" title="効果音のオン/オフ" class="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-sm">
+                <svg id="icon-sound-on" xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+                </svg>
+                <svg id="icon-sound-off" xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 hidden text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                    <line x1="23" y1="9" x2="17" y2="15"></line>
+                    <line x1="17" y1="9" x2="23" y2="15"></line>
+                </svg>
+            </button>
+
+            <!-- 遊び方モーダルボタン -->
+            <button id="btn-help" title="操作方法・ルール" class="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                </svg>
+            </button>
+
+            <!-- ダーク/ライトモード切替 -->
+            <button id="btn-theme" title="テーマ切替" class="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-sm">
+                <!-- Sun icon -->
+                <svg id="icon-sun" xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 hidden dark:block text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="5"></circle>
+                    <line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line>
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                    <line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line>
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                </svg>
+                <!-- Moon icon -->
+                <svg id="icon-moon" xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 block dark:hidden text-slate-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                </svg>
+            </button>
+        </div>
+    </header>
+
+    <!-- メインコンテンツ -->
+    <main class="flex-1 w-full max-w-5xl mx-auto px-4 pb-8 flex flex-col items-center">
+        
+        <!-- 難易度選択タブ & ベストタイム表示 -->
+        <div class="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl p-2 shadow-sm border border-slate-200/80 dark:border-slate-800 mb-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+            <div class="grid grid-cols-4 gap-1 w-full sm:w-auto flex-1" role="tablist">
+                <button data-diff="beginner" class="diff-btn py-2 px-3 rounded-xl text-sm font-semibold transition text-center bg-indigo-600 text-white shadow-sm">
+                    初級
+                </button>
+                <button data-diff="intermediate" class="diff-btn py-2 px-3 rounded-xl text-sm font-semibold transition text-center text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">
+                    中級
+                </button>
+                <button data-diff="expert" class="diff-btn py-2 px-3 rounded-xl text-sm font-semibold transition text-center text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">
+                    上級
+                </button>
+                <button data-diff="custom" class="diff-btn py-2 px-3 rounded-xl text-sm font-semibold transition text-center text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">
+                    カスタム
+                </button>
+            </div>
+
+            <!-- ベストタイムバッジ -->
+            <div id="best-time-badge" class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200/70 dark:border-amber-800/50 text-amber-700 dark:text-amber-300 text-xs font-medium whitespace-nowrap">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-amber-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path>
+                    <path d="M4 22h16"></path><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path>
+                    <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path>
+                    <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path>
+                </svg>
+                <span>自己ベスト: <strong id="best-time-value" class="font-mono text-sm">--秒</strong></span>
+            </div>
+        </div>
+
+        <!-- カスタム設定パネル（カスタム選択時のみ表示） -->
+        <div id="custom-panel" class="hidden w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-200/80 dark:border-slate-800 mb-4 animate-pop">
+            <div class="grid grid-cols-3 gap-3 mb-3">
+                <div>
+                    <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">横幅 (9〜40)</label>
+                    <input type="number" id="custom-cols" min="9" max="40" value="20" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">高さ (9〜30)</label>
+                    <input type="number" id="custom-rows" min="9" max="30" value="15" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">地雷数</label>
+                    <input type="number" id="custom-mines" min="1" max="500" value="45" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+            </div>
+            <div class="flex items-center justify-between">
+                <span id="custom-error" class="text-xs text-rose-500 font-medium"></span>
+                <button id="btn-apply-custom" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition shadow-sm">
+                    この設定で開始
+                </button>
+            </div>
+        </div>
+
+        <!-- ゲームステータスバー & ボードカード -->
+        <div class="w-full flex flex-col items-center">
+            <div class="w-full max-w-fit bg-white dark:bg-slate-900 rounded-3xl p-4 sm:p-6 shadow-xl shadow-slate-200/60 dark:shadow-black/40 border border-slate-200/80 dark:border-slate-800 flex flex-col items-center">
+                
+                <!-- ステータスヘッダー（残り地雷・リセット顔・経過時間） -->
+                <div class="w-full flex items-center justify-between gap-4 mb-4 px-1">
+                    <!-- 残り地雷カウンター -->
+                    <div class="flex items-center gap-2 bg-slate-100 dark:bg-slate-850 px-3.5 py-2 rounded-2xl border border-slate-200/70 dark:border-slate-800 min-w-[96px] justify-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-rose-500" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M4 21v-7m0 0V5a1 1 0 0 1 1-1h11.586a1 1 0 0 1 .707 1.707L14.5 8.5l2.793 2.793a1 1 0 0 1-.707 1.707H4z"/>
+                        </svg>
+                        <span id="mine-counter" class="font-mono text-xl font-bold tracking-wider text-slate-800 dark:text-slate-100">010</span>
+                    </div>
+
+                    <!-- リセットボタン（状態に応じた表情アイコン） -->
+                    <button id="btn-reset" title="新しいゲームを開始" class="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-850 hover:bg-slate-200/80 dark:hover:bg-slate-800 active:scale-95 border border-slate-200/80 dark:border-slate-700 flex items-center justify-center transition shadow-sm">
+                        <span id="face-icon" class="text-2xl leading-none select-none">🙂</span>
+                    </button>
+
+                    <!-- 経過時間タイマー -->
+                    <div class="flex items-center gap-2 bg-slate-100 dark:bg-slate-850 px-3.5 py-2 rounded-2xl border border-slate-200/70 dark:border-slate-800 min-w-[96px] justify-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-indigo-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <polyline points="12 6 12 12 16 14"></polyline>
+                        </svg>
+                        <span id="timer-display" class="font-mono text-xl font-bold tracking-wider text-slate-800 dark:text-slate-100">000</span>
+                    </div>
+                </div>
+
+                <!-- 勝敗メッセージバナー（クリア・ゲームオーバー時に表示） -->
+                <div id="result-banner" class="hidden w-full mb-4 px-4 py-3 rounded-2xl flex items-center justify-between gap-3 animate-pop">
+                    <div class="flex items-center gap-2.5">
+                        <span id="result-emoji" class="text-2xl">🎉</span>
+                        <div>
+                            <p id="result-title" class="font-bold text-sm sm:text-base"></p>
+                            <p id="result-subtitle" class="text-xs opacity-90"></p>
+                        </div>
+                    </div>
+                    <button id="btn-play-again" class="px-3.5 py-1.5 rounded-xl font-semibold text-xs sm:text-sm transition shadow-sm whitespace-nowrap">
+                        もう一度遊ぶ
+                    </button>
+                </div>
+
+                <!-- ゲームボードコンテナ（横幅が大きい場合は横スクロール可能） -->
+                <div class="board-container w-full max-w-[90vw] sm:max-w-[85vw] overflow-x-auto pb-1 flex justify-start sm:justify-center">
+                    <div id="game-board" class="grid gap-1 p-1.5 bg-slate-200/70 dark:bg-slate-950/80 rounded-2xl border border-slate-300/60 dark:border-slate-800/80 touch-manipulation">
+                        <!-- セルはJavaScriptで動的生成 -->
+                    </div>
+                </div>
+
+                <!-- モバイル・タッチ操作向け フラグモード切替バー -->
+                <div class="w-full mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
+                    <div class="flex items-center gap-2">
+                        <button id="btn-mode-toggle" class="flex items-center gap-2 px-4 py-2 rounded-xl font-semibold text-sm transition border shadow-sm bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200">
+                            <span id="mode-icon" class="text-base">⛏️</span>
+                            <span id="mode-label">モード: マスを開く</span>
+                        </button>
+                    </div>
+                    <p class="text-xs text-slate-400 dark:text-slate-500">
+                        右クリック / 長押しで旗を立てる ・ 数字クリックで周囲一括オープン
+                    </p>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <!-- 遊び方・ルール説明モーダル -->
+    <div id="help-modal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl animate-pop">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-bold flex items-center gap-2">
+                    <span class="text-indigo-500">📘</span> 操作方法とルール
+                </h2>
+                <button id="btn-close-help" class="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="space-y-3 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-850 border border-slate-100 dark:border-slate-800">
+                    <p class="font-semibold text-slate-800 dark:text-slate-100 mb-1">🎯 ゲームの目的</p>
+                    <p>地雷を踏まないように、地雷以外のすべてのマスを開けばクリアです。数字はそのマスの周囲8マスに隠れている地雷の数を示します。</p>
+                </div>
+                <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-850 border border-slate-100 dark:border-slate-800 space-y-1.5">
+                    <p class="font-semibold text-slate-800 dark:text-slate-100 mb-1">🖱️ 基本操作</p>
+                    <p>・<strong>マスを開く：</strong>左クリック（またはタップ）</p>
+                    <p>・<strong>旗（フラグ）を立てる：</strong>右クリック、スマホでは長押し、または下部の「モード切替」ボタン</p>
+                    <p>・<strong>周囲一括オープン（コード機能）：</strong>数字と同じ数の旗が周囲に立っている状態で、その数字マスをクリックすると残りの周囲マスを一気に開けます。</p>
+                </div>
+                <div class="p-3 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/50">
+                    <p class="font-semibold text-indigo-800 dark:text-indigo-300 mb-0.5">🛡️ 初手安全保証</p>
+                    <p class="text-xs text-indigo-700/90 dark:text-indigo-300/80">最初にクリックしたマスとその周囲8マスには絶対に地雷が配置されません。安心して1手目を指せます。</p>
+                </div>
+            </div>
+            <button id="btn-confirm-help" class="mt-5 w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm transition shadow-sm">
+                閉じる
+            </button>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * モダン・マインスイーパー メインロジック
+         */
+        (() => {
+            // 難易度プリセット定義
+            const DIFFICULTIES = {
+                beginner: { name: '初級', rows: 9, cols: 9, mines: 10 },
+                intermediate: { name: '中級', rows: 16, cols: 16, mines: 40 },
+                expert: { name: '上級', rows: 16, cols: 30, mines: 99 },
+                custom: { name: 'カスタム', rows: 15, cols: 20, mines: 45 }
+            };
+
+            // アプリケーション状態
+            const state = {
+                difficulty: 'beginner',
+                rows: 9,
+                cols: 9,
+                totalMines: 10,
+                board: [], // 2D配列: { isMine, isRevealed, isFlagged, neighborMines, exploded, wrongFlag }
+                gameState: 'idle', // 'idle' | 'playing' | 'won' | 'lost'
+                flagsPlaced: 0,
+                revealedCount: 0,
+                timer: 0,
+                timerInterval: null,
+                flagMode: false, // モバイル等でのワンタップ旗立てモード
+                soundEnabled: true,
+                bestTimes: {
+                    beginner: null,
+                    intermediate: null,
+                    expert: null
+                }
+            };
+
+            // DOM要素のキャッシュ
+            const els = {
+                board: document.getElementById('game-board'),
+                mineCounter: document.getElementById('mine-counter'),
+                timerDisplay: document.getElementById('timer-display'),
+                faceIcon: document.getElementById('face-icon'),
+                btnReset: document.getElementById('btn-reset'),
+                diffBtns: document.querySelectorAll('.diff-btn'),
+                customPanel: document.getElementById('custom-panel'),
+                customCols: document.getElementById('custom-cols'),
+                customRows: document.getElementById('custom-rows'),
+                customMines: document.getElementById('custom-mines'),
+                customError: document.getElementById('custom-error'),
+                btnApplyCustom: document.getElementById('btn-apply-custom'),
+                bestTimeBadge: document.getElementById('best-time-badge'),
+                bestTimeValue: document.getElementById('best-time-value'),
+                resultBanner: document.getElementById('result-banner'),
+                resultEmoji: document.getElementById('result-emoji'),
+                resultTitle: document.getElementById('result-title'),
+                resultSubtitle: document.getElementById('result-subtitle'),
+                btnPlayAgain: document.getElementById('btn-play-again'),
+                btnModeToggle: document.getElementById('btn-mode-toggle'),
+                modeIcon: document.getElementById('mode-icon'),
+                modeLabel: document.getElementById('mode-label'),
+                btnTheme: document.getElementById('btn-theme'),
+                btnSound: document.getElementById('btn-sound'),
+                iconSoundOn: document.getElementById('icon-sound-on'),
+                iconSoundOff: document.getElementById('icon-sound-off'),
+                btnHelp: document.getElementById('btn-help'),
+                helpModal: document.getElementById('help-modal'),
+                btnCloseHelp: document.getElementById('btn-close-help'),
+                btnConfirmHelp: document.getElementById('btn-confirm-help')
+            };
+
+            // ==========================================
+            // サウンドエフェクト (Tone.js)
+            // ==========================================
+            let synth = null;
+            function playSound(type) {
+                if (!state.soundEnabled || typeof Tone === 'undefined') return;
+                try {
+                    if (Tone.context.state !== 'running') {
+                        Tone.start();
+                    }
+                    if (!synth) {
+                        synth = new Tone.PolySynth(Tone.Synth, {
+                            oscillator: { type: 'sine' },
+                            envelope: { attack: 0.005, decay: 0.08, sustain: 0, release: 0.05 },
+                            volume: -14
+                        }).toDestination();
+                    }
+                    const now = Tone.now();
+                    switch (type) {
+                        case 'reveal':
+                            synth.triggerAttackRelease('C5', '32n', now);
+                            break;
+                        case 'cascade':
+                            synth.triggerAttackRelease(['E5', 'G5'], '32n', now);
+                            break;
+                        case 'flag':
+                            synth.triggerAttackRelease('A4', '32n', now);
+                            break;
+                        case 'unflag':
+                            synth.triggerAttackRelease('F4', '32n', now);
+                            break;
+                        case 'win':
+                            synth.triggerAttackRelease('C5', '16n', now);
+                            synth.triggerAttackRelease('E5', '16n', now + 0.08);
+                            synth.triggerAttackRelease('G5', '16n', now + 0.16);
+                            synth.triggerAttackRelease('C6', '8n', now + 0.24);
+                            break;
+                        case 'lose':
+                            synth.triggerAttackRelease(['C3', 'C#3'], '4n', now);
+                            break;
+                    }
+                } catch (e) {
+                    // オーディオ再生エラーは無視
+                }
+            }
+
+            // ==========================================
+            // ローカルストレージ管理（ベストタイム・テーマ）
+            // ==========================================
+            function loadSettings() {
+                try {
+                    const savedBest = localStorage.getItem('minesweeper_best_times');
+                    if (savedBest) {
+                        state.bestTimes = { ...state.bestTimes, ...JSON.parse(savedBest) };
+                    }
+                    const savedTheme = localStorage.getItem('minesweeper_theme');
+                    if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                        document.documentElement.classList.add('dark');
+                    } else {
+                        document.documentElement.classList.remove('dark');
+                    }
+                } catch (e) {
+                    console.warn('設定の読み込みに失敗しました', e);
+                }
+            }
+
+            function saveBestTime(diff, time) {
+                if (!['beginner', 'intermediate', 'expert'].includes(diff)) return false;
+                const currentBest = state.bestTimes[diff];
+                if (currentBest === null || time < currentBest) {
+                    state.bestTimes[diff] = time;
+                    try {
+                        localStorage.setItem('minesweeper_best_times', JSON.stringify(state.bestTimes));
+                    } catch (e) {}
+                    updateBestTimeUI();
+                    return true;
+                }
+                return false;
+            }
+
+            function updateBestTimeUI() {
+                if (state.difficulty === 'custom') {
+                    els.bestTimeBadge.classList.add('opacity-40');
+                    els.bestTimeValue.textContent = '対象外';
+                } else {
+                    els.bestTimeBadge.classList.remove('opacity-40');
+                    const best = state.bestTimes[state.difficulty];
+                    els.bestTimeValue.textContent = best !== null ? `${best}秒` : '--秒';
+                }
+            }
+
+            // ==========================================
+            // ゲーム初期化・盤面生成
+            // ==========================================
+            function initGame() {
+                stopTimer();
+                state.timer = 0;
+                state.flagsPlaced = 0;
+                state.revealedCount = 0;
+                state.gameState = 'idle';
+
+                updateTimerUI();
+                updateMineCounterUI();
+                setFace('🙂');
+                hideResultBanner();
+                els.board.classList.remove('animate-shake');
+
+                // 空の盤面データを作成
+                state.board = Array.from({ length: state.rows }, (_, r) =>
+                    Array.from({ length: state.cols }, (_, c) => ({
+                        row: r,
+                        col: c,
+                        isMine: false,
+                        isRevealed: false,
+                        isFlagged: false,
+                        neighborMines: 0,
+                        exploded: false,
+                        wrongFlag: false
+                    }))
+                );
+
+                renderBoard();
+                updateBestTimeUI();
+            }
+
+            /**
+             * 初手保証付き地雷配置
+             * 最初にクリックされた (safeRow, safeCol) とその周囲8マスを除外して地雷を配置する
+             */
+            function placeMines(safeRow, safeCol) {
+                const candidates = [];
+                for (let r = 0; r < state.rows; r++) {
+                    for (let c = 0; c < state.cols; c++) {
+                        // 最初のクリック位置とその周囲8マスは安全地帯
+                        if (Math.abs(r - safeRow) <= 1 && Math.abs(c - safeCol) <= 1) {
+                            continue;
+                        }
+                        candidates.push({ r, c });
+                    }
+                }
+
+                // Fisher-Yatesシャッフルでランダムに地雷を配置
+                for (let i = candidates.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+                }
+
+                const minesToPlace = Math.min(state.totalMines, candidates.length);
+                for (let i = 0; i < minesToPlace; i++) {
+                    const { r, c } = candidates[i];
+                    state.board[r][c].isMine = true;
+                }
+
+                // 各マスの周囲地雷数を計算
+                for (let r = 0; r < state.rows; r++) {
+                    for (let c = 0; c < state.cols; c++) {
+                        if (!state.board[r][c].isMine) {
+                            state.board[r][c].neighborMines = countNeighborMines(r, c);
+                        }
+                    }
+                }
+            }
+
+            function getNeighbors(r, c) {
+                const neighbors = [];
+                for (let dr = -1; dr <= 1; dr++) {
+                    for (let dc = -1; dc <= 1; dc++) {
+                        if (dr === 0 && dc === 0) continue;
+                        const nr = r + dr;
+                        const nc = c + dc;
+                        if (nr >= 0 && nr < state.rows && nc >= 0 && nc < state.cols) {
+                            neighbors.push(state.board[nr][nc]);
+                        }
+                    }
+                }
+                return neighbors;
+            }
+
+            function countNeighborMines(r, c) {
+                return getNeighbors(r, c).filter(cell => cell.isMine).length;
+            }
+
+            // ==========================================
+            // DOM描画・更新
+            // ==========================================
+            function renderBoard() {
+                els.board.innerHTML = '';
+
+                // セルサイズを列数に応じて最適化（レスポンシブ）
+                let cellSizeClass = 'w-8 h-8 sm:w-9 sm:h-9 text-base sm:text-lg';
+                if (state.cols >= 24) {
+                    cellSizeClass = 'w-7 h-7 sm:w-8 sm:h-8 text-sm sm:text-base';
+                } else if (state.cols >= 16) {
+                    cellSizeClass = 'w-7 h-7 sm:w-8 sm:h-8 text-sm sm:text-base';
+                }
+
+                els.board.style.gridTemplateColumns = `repeat(${state.cols}, minmax(0, 1fr))`;
+
+                const fragment = document.createDocumentFragment();
+                for (let r = 0; r < state.rows; r++) {
+                    for (let c = 0; c < state.cols; c++) {
+                        const cellEl = document.createElement('div');
+                        cellEl.className = `cell cell-hidden ${cellSizeClass}`;
+                        cellEl.dataset.row = r;
+                        cellEl.dataset.col = c;
+                        attachCellEvents(cellEl, r, c);
+                        fragment.appendChild(cellEl);
+                    }
+                }
+                els.board.appendChild(fragment);
+            }
+
+            function getCellElement(r, c) {
+                return els.board.children[r * state.cols + c];
+            }
+
+            function updateCellUI(r, c, animate = false) {
+                const cell = state.board[r][c];
+                const el = getCellElement(r, c);
+                if (!el) return;
+
+                // 基本サイズクラスを保持しつつ状態クラスをリセット
+                const sizeClasses = Array.from(el.classList).filter(cls => cls.startsWith('w-') || cls.startsWith('h-') || cls.startsWith('sm:') || cls.startsWith('text-'));
+                el.className = `cell ${sizeClasses.join(' ')}`;
+                el.innerHTML = '';
+
+                if (cell.isRevealed) {
+                    el.classList.add('cell-revealed');
+                    if (animate) el.classList.add('animate-pop');
+
+                    if (cell.isMine) {
+                        if (cell.exploded) {
+                            el.classList.add('cell-mine-exploded');
+                        } else {
+                            el.classList.add('cell-mine-revealed');
+                        }
+                        el.innerHTML = getMineSVG(cell.exploded);
+                    } else if (cell.neighborMines > 0) {
+                        el.classList.add(`num-${cell.neighborMines}`, 'has-number');
+                        el.textContent = cell.neighborMines;
+                    }
+                } else {
+                    el.classList.add('cell-hidden');
+                    if (cell.wrongFlag) {
+                        el.classList.add('cell-flag-wrong');
+                        el.innerHTML = getWrongFlagSVG();
+                    } else if (cell.isFlagged) {
+                        el.innerHTML = getFlagSVG();
+                        if (animate) el.firstChild.classList.add('animate-pop');
+                    }
+                }
+            }
+
+            // アイコンSVG生成ヘルパー
+            function getFlagSVG() {
+                return `<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 sm:w-5 sm:h-5 text-rose-500 drop-shadow-sm pointer-events-none" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M5 21v-7m0 0V5a1 1 0 0 1 1-1h11.586a1 1 0 0 1 .707 1.707L15.5 8.5l2.793 2.793a1 1 0 0 1-.707 1.707H5z"/>
+                </svg>`;
+            }
+
+            function getWrongFlagSVG() {
+                return `<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 sm:w-5 sm:h-5 text-amber-600 dark:text-amber-400 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>`;
+            }
+
+            function getMineSVG(exploded) {
+                const colorClass = exploded ? 'text-white' : 'text-slate-800 dark:text-rose-200';
+                return `<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 sm:w-5 sm:h-5 ${colorClass} pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="5" fill="currentColor"/>
+                    <path d="M12 2v3"/><path d="M12 19v3"/>
+                    <path d="M4.93 4.93l2.12 2.12"/><path d="M16.95 16.95l2.12 2.12"/>
+                    <path d="M2 12h3"/><path d="M19 12h3"/>
+                    <path d="M4.93 19.07l2.12-2.12"/><path d="M16.95 7.05l2.12-2.12"/>
+                </svg>`;
+            }
+
+            // ==========================================
+            // セルのイベントハンドリング（PC・モバイル両対応）
+            // ==========================================
+            function attachCellEvents(el, r, c) {
+                let longPressTimer = null;
+                let isLongPress = false;
+                let touchMoved = false;
+
+                // 右クリック（フラグ切替）
+                el.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    if (state.gameState === 'won' || state.gameState === 'lost') return;
+                    handleFlagToggle(r, c);
+                });
+
+                // マウスダウン時の表情変化（😮）
+                el.addEventListener('mousedown', (e) => {
+                    if (e.button !== 0) return;
+                    if (state.gameState === 'idle' || state.gameState === 'playing') {
+                        const cell = state.board[r][c];
+                        if (!cell.isRevealed && !cell.isFlagged) {
+                            setFace('😮');
+                        } else if (cell.isRevealed && cell.neighborMines > 0) {
+                            // コード（周囲オープン）のプレビュー押下エフェクト
+                            highlightUnflaggedNeighbors(r, c, true);
+                        }
+                    }
+                });
+
+                el.addEventListener('mouseup', () => {
+                    if (state.gameState === 'idle' || state.gameState === 'playing') {
+                        setFace('🙂');
+                        highlightUnflaggedNeighbors(r, c, false);
+                    }
+                });
+
+                el.addEventListener('mouseleave', () => {
+                    if (state.gameState === 'idle' || state.gameState === 'playing') {
+                        setFace('🙂');
+                        highlightUnflaggedNeighbors(r, c, false);
+                    }
+                });
+
+                // タッチ長押しで旗を立てる対応
+                el.addEventListener('touchstart', (e) => {
+                    touchMoved = false;
+                    isLongPress = false;
+                    if (state.gameState === 'won' || state.gameState === 'lost') return;
+
+                    longPressTimer = setTimeout(() => {
+                        isLongPress = true;
+                        if (!touchMoved) {
+                            // バイブレーション対応端末なら軽く振動
+                            if (navigator.vibrate) navigator.vibrate(35);
+                            handleFlagToggle(r, c);
+                        }
+                    }, 380);
+                }, { passive: true });
+
+                el.addEventListener('touchmove', () => {
+                    touchMoved = true;
+                    clearTimeout(longPressTimer);
+                }, { passive: true });
+
+                el.addEventListener('touchend', (e) => {
+                    clearTimeout(longPressTimer);
+                    if (isLongPress) {
+                        e.preventDefault(); // 長押し後のclickイベント発火を防止
+                    }
+                });
+
+                // クリック / タップ処理
+                el.addEventListener('click', (e) => {
+                    if (isLongPress) return;
+                    if (state.gameState === 'won' || state.gameState === 'lost') return;
+
+                    const cell = state.board[r][c];
+
+                    // 既に開いている数字マスのクリックは「コード（周囲一括オープン）」
+                    if (cell.isRevealed && cell.neighborMines > 0) {
+                        handleChord(r, c);
+                        return;
+                    }
+
+                    // フラグモードがONの場合
+                    if (state.flagMode) {
+                        handleFlagToggle(r, c);
+                    } else {
+                        handleCellOpen(r, c);
+                    }
+                });
+            }
+
+            // 数字マス押下時に周囲の未開封・未フラグセルを凹ませる視覚フィードバック
+            function highlightUnflaggedNeighbors(r, c, active) {
+                getNeighbors(r, c).forEach(n => {
+                    if (!n.isRevealed && !n.isFlagged) {
+                        const el = getCellElement(n.row, n.col);
+                        if (el) {
+                            if (active) el.classList.add('cell-pressed');
+                            else el.classList.remove('cell-pressed');
+                        }
+                    }
+                });
+            }
+
+            // ==========================================
+            // ゲーム進行ロジック（オープン・フラグ・コード）
+            // ==========================================
+            function handleFlagToggle(r, c) {
+                const cell = state.board[r][c];
+                if (cell.isRevealed) return;
+
+                cell.isFlagged = !cell.isFlagged;
+                state.flagsPlaced += cell.isFlagged ? 1 : -1;
+
+                playSound(cell.isFlagged ? 'flag' : 'unflag');
+                updateCellUI(r, c, true);
+                updateMineCounterUI();
+            }
+
+            function handleCellOpen(r, c) {
+                const cell = state.board[r][c];
+                if (cell.isRevealed || cell.isFlagged) return;
+
+                // 初手の場合：地雷を配置しタイマー開始
+                if (state.gameState === 'idle') {
+                    placeMines(r, c);
+                    state.gameState = 'playing';
+                    startTimer();
+                }
+
+                // 地雷を踏んだ場合
+                if (cell.isMine) {
+                    cell.isRevealed = true;
+                    cell.exploded = true;
+                    triggerGameOver();
+                    return;
+                }
+
+                // 安全なマスを開く（周囲地雷0なら連鎖オープン）
+                const openedCells = revealCellsBFS(r, c);
+                playSound(openedCells > 1 ? 'cascade' : 'reveal');
+
+                checkWinCondition();
+            }
+
+            /**
+             * 幅優先探索（BFS）による安全なマスの連鎖オープン
+             */
+            function revealCellsBFS(startR, startC) {
+                const queue = [[startR, startC]];
+                let openedCount = 0;
+
+                while (queue.length > 0) {
+                    const [r, c] = queue.shift();
+                    const cell = state.board[r][c];
+
+                    if (cell.isRevealed || cell.isFlagged || cell.isMine) continue;
+
+                    cell.isRevealed = true;
+                    state.revealedCount++;
+                    openedCount++;
+                    updateCellUI(r, c, true);
+
+                    // 周囲に地雷が0個の場合、隣接マスもキューに追加
+                    if (cell.neighborMines === 0) {
+                        const neighbors = getNeighbors(r, c);
+                        for (const n of neighbors) {
+                            if (!n.isRevealed && !n.isFlagged && !n.isMine) {
+                                queue.push([n.row, n.col]);
+                            }
+                        }
+                    }
+                }
+                return openedCount;
+            }
+
+            /**
+             * コード機能（数字マスクリックで周囲を一括オープン）
+             */
+            function handleChord(r, c) {
+                const cell = state.board[r][c];
+                if (!cell.isRevealed || cell.neighborMines === 0) return;
+
+                const neighbors = getNeighbors(r, c);
+                const flaggedCount = neighbors.filter(n => n.isFlagged).length;
+
+                // 数字と周囲の旗の数が一致している場合のみ実行
+                if (flaggedCount !== cell.neighborMines) return;
+
+                let hitMine = false;
+                let totalOpened = 0;
+
+                for (const n of neighbors) {
+                    if (!n.isRevealed && !n.isFlagged) {
+                        if (n.isMine) {
+                            n.isRevealed = true;
+                            n.exploded = true;
+                            hitMine = true;
+                        } else {
+                            totalOpened += revealCellsBFS(n.row, n.col);
+                        }
+                    }
+                }
+
+                if (hitMine) {
+                    triggerGameOver();
+                } else if (totalOpened > 0) {
+                    playSound('cascade');
+                    checkWinCondition();
+                }
+            }
+
+            // ==========================================
+            // 勝敗判定・終了処理
+            // ==========================================
+            function checkWinCondition() {
+                const totalSafeCells = state.rows * state.cols - state.totalMines;
+                if (state.revealedCount >= totalSafeCells) {
+                    state.gameState = 'won';
+                    stopTimer();
+                    setFace('😎');
+                    playSound('win');
+
+                    // 残っている未フラグ地雷に自動で旗を立てる
+                    for (let r = 0; r < state.rows; r++) {
+                        for (let c = 0; c < state.cols; c++) {
+                            const cell = state.board[r][c];
+                            if (cell.isMine && !cell.isFlagged) {
+                                cell.isFlagged = true;
+                                updateCellUI(r, c, true);
+                            }
+                        }
+                    }
+                    state.flagsPlaced = state.totalMines;
+                    updateMineCounterUI();
+
+                    const isNewRecord = saveBestTime(state.difficulty, state.timer);
+                    showResultBanner(
+                        true,
+                        isNewRecord ? '🎉 自己ベスト更新！クリアおめでとう！' : '🎉 ゲームクリア！',
+                        `クリアタイム: ${state.timer}秒（${DIFFICULTIES[state.difficulty].name}）`
+                    );
+                }
+            }
+
+            function triggerGameOver() {
+                state.gameState = 'lost';
+                stopTimer();
+                setFace('😵');
+                playSound('lose');
+                els.board.classList.add('animate-shake');
+
+                // すべての地雷位置と誤フラグを表示
+                for (let r = 0; r < state.rows; r++) {
+                    for (let c = 0; c < state.cols; c++) {
+                        const cell = state.board[r][c];
+                        if (cell.isMine && !cell.isFlagged) {
+                            cell.isRevealed = true;
+                            updateCellUI(r, c, cell.exploded);
+                        } else if (!cell.isMine && cell.isFlagged) {
+                            cell.wrongFlag = true;
+                            updateCellUI(r, c, true);
+                        }
+                    }
+                }
+
+                showResultBanner(
+                    false,
+                    '💥 ゲームオーバー',
+                    '地雷を踏んでしまいました。赤いバツ印は誤った旗の位置です。'
+                );
+            }
+
+            // ==========================================
+            // タイマー・カウンター・UI制御
+            // ==========================================
+            function startTimer() {
+                stopTimer();
+                state.timerInterval = setInterval(() => {
+                    if (state.timer < 999) {
+                        state.timer++;
+                        updateTimerUI();
+                    }
+                }, 1000);
+            }
+
+            function stopTimer() {
+                if (state.timerInterval) {
+                    clearInterval(state.timerInterval);
+                    state.timerInterval = null;
+                }
+            }
+
+            function updateTimerUI() {
+                els.timerDisplay.textContent = String(state.timer).padStart(3, '0');
+            }
+
+            function updateMineCounterUI() {
+                const remaining = state.totalMines - state.flagsPlaced;
+                if (remaining < 0) {
+                    els.mineCounter.textContent = '-' + String(Math.abs(remaining)).padStart(2, '0');
+                } else {
+                    els.mineCounter.textContent = String(remaining).padStart(3, '0');
+                }
+            }
+
+            function setFace(emoji) {
+                els.faceIcon.textContent = emoji;
+            }
+
+            function showResultBanner(isWin, title, subtitle) {
+                els.resultBanner.classList.remove(
+                    'hidden',
+                    'bg-emerald-50', 'dark:bg-emerald-950/50', 'border-emerald-200', 'dark:border-emerald-800', 'text-emerald-900', 'dark:text-emerald-100',
+                    'bg-rose-50', 'dark:bg-rose-950/50', 'border-rose-200', 'dark:border-rose-800', 'text-rose-900', 'dark:text-rose-100'
+                );
+                els.btnPlayAgain.classList.remove(
+                    'bg-emerald-600', 'hover:bg-emerald-700', 'text-white',
+                    'bg-rose-600', 'hover:bg-rose-700'
+                );
+
+                els.resultBanner.classList.add('border');
+                if (isWin) {
+                    els.resultBanner.classList.add('bg-emerald-50', 'dark:bg-emerald-950/50', 'border-emerald-200', 'dark:border-emerald-800', 'text-emerald-900', 'dark:text-emerald-100');
+                    els.btnPlayAgain.classList.add('bg-emerald-600', 'hover:bg-emerald-700', 'text-white');
+                    els.resultEmoji.textContent = '🏆';
+                } else {
+                    els.resultBanner.classList.add('bg-rose-50', 'dark:bg-rose-950/50', 'border-rose-200', 'dark:border-rose-800', 'text-rose-900', 'dark:text-rose-100');
+                    els.btnPlayAgain.classList.add('bg-rose-600', 'hover:bg-rose-700', 'text-white');
+                    els.resultEmoji.textContent = '💣';
+                }
+
+                els.resultTitle.textContent = title;
+                els.resultSubtitle.textContent = subtitle;
+            }
+
+            function hideResultBanner() {
+                els.resultBanner.classList.add('hidden');
+            }
+
+            // ==========================================
+            // イベントリスナー登録（UIボタン類）
+            // ==========================================
+            // 難易度切替
+            els.diffBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const diff = btn.dataset.diff;
+                    state.difficulty = diff;
+
+                    // タブのアクティブスタイル更新
+                    els.diffBtns.forEach(b => {
+                        if (b.dataset.diff === diff) {
+                            b.className = 'diff-btn py-2 px-3 rounded-xl text-sm font-semibold transition text-center bg-indigo-600 text-white shadow-sm';
+                        } else {
+                            b.className = 'diff-btn py-2 px-3 rounded-xl text-sm font-semibold transition text-center text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800';
+                        }
+                    });
+
+                    if (diff === 'custom') {
+                        els.customPanel.classList.remove('hidden');
+                        updateBestTimeUI();
+                    } else {
+                        els.customPanel.classList.add('hidden');
+                        const preset = DIFFICULTIES[diff];
+                        state.rows = preset.rows;
+                        state.cols = preset.cols;
+                        state.totalMines = preset.mines;
+                        initGame();
+                    }
+                });
+            });
+
+            // カスタム設定適用
+            els.btnApplyCustom.addEventListener('click', () => {
+                const cols = parseInt(els.customCols.value, 10);
+                const rows = parseInt(els.customRows.value, 10);
+                const mines = parseInt(els.customMines.value, 10);
+
+                if (isNaN(cols) || cols < 9 || cols > 40) {
+                    els.customError.textContent = '横幅は9〜40の間で指定してください。';
+                    return;
+                }
+                if (isNaN(rows) || rows < 9 || rows > 30) {
+                    els.customError.textContent = '高さは9〜30の間で指定してください。';
+                    return;
+                }
+                // 初手9マス安全地帯を確保するため最大地雷数を制限
+                const maxMines = rows * cols - 9;
+                if (isNaN(mines) || mines < 1 || mines > maxMines) {
+                    els.customError.textContent = `地雷数は1〜${maxMines}の間で指定してください。`;
+                    return;
+                }
+
+                els.customError.textContent = '';
+                state.rows = rows;
+                state.cols = cols;
+                state.totalMines = mines;
+                initGame();
+            });
+
+            // リセット・もう一度遊ぶ
+            els.btnReset.addEventListener('click', initGame);
+            els.btnPlayAgain.addEventListener('click', initGame);
+
+            // フラグモード切替（モバイル向けワンタップ操作）
+            els.btnModeToggle.addEventListener('click', () => {
+                state.flagMode = !state.flagMode;
+                if (state.flagMode) {
+                    els.btnModeToggle.classList.remove('bg-slate-100', 'dark:bg-slate-800', 'border-slate-200', 'dark:border-slate-700', 'text-slate-700', 'dark:text-slate-200');
+                    els.btnModeToggle.classList.add('bg-rose-500', 'border-rose-600', 'text-white');
+                    els.modeIcon.textContent = '🚩';
+                    els.modeLabel.textContent = 'モード: 旗を立てる';
+                } else {
+                    els.btnModeToggle.classList.add('bg-slate-100', 'dark:bg-slate-800', 'border-slate-200', 'dark:border-slate-700', 'text-slate-700', 'dark:text-slate-200');
+                    els.btnModeToggle.classList.remove('bg-rose-500', 'border-rose-600', 'text-white');
+                    els.modeIcon.textContent = '⛏️';
+                    els.modeLabel.textContent = 'モード: マスを開く';
+                }
+            });
+
+            // ダーク/ライトモード切替
+            els.btnTheme.addEventListener('click', () => {
+                const isDark = document.documentElement.classList.toggle('dark');
+                try {
+                    localStorage.setItem('minesweeper_theme', isDark ? 'dark' : 'light');
+                } catch (e) {}
+            });
+
+            // サウンド切替
+            els.btnSound.addEventListener('click', () => {
+                state.soundEnabled = !state.soundEnabled;
+                if (state.soundEnabled) {
+                    els.iconSoundOn.classList.remove('hidden');
+                    els.iconSoundOff.classList.add('hidden');
+                } else {
+                    els.iconSoundOn.classList.add('hidden');
+                    els.iconSoundOff.classList.remove('hidden');
+                }
+            });
+
+            // ヘルプモーダル開閉
+            els.btnHelp.addEventListener('click', () => els.helpModal.classList.remove('hidden'));
+            els.btnCloseHelp.addEventListener('click', () => els.helpModal.classList.add('hidden'));
+            els.btnConfirmHelp.addEventListener('click', () => els.helpModal.classList.add('hidden'));
+            els.helpModal.addEventListener('click', (e) => {
+                if (e.target === els.helpModal) {
+                    els.helpModal.classList.add('hidden');
+                }
+            });
+
+            // 初期化実行
+            loadSettings();
+            initGame();
+        })();
+    </script>
+</body>
+</html>
